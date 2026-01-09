@@ -1,11 +1,5 @@
-// src/app/page.tsx
-// Server Component mínimo. Importa el componente cliente y fuerza modo dinámico.
+import { redirect } from "next/navigation";
 
-import PageClient from './PageClient';
-
-export const dynamic = 'force-dynamic'; // evita prerender/ISR
-export const revalidate = 0;            // sin cacheo estático
-
-export default function Page() {
-  return <PageClient />;
+export default function Home() {
+  redirect("/test");
 }

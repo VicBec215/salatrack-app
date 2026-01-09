@@ -1,6 +1,5 @@
-// src/app/test/page.tsx
-import PageClientTest from "../PageClientTest";
+import PageClientBoard from "../PageClientBoard";
 
-export default function Page() {
-  return <PageClientTest />;
+export default function TestPage() {
+  return <PageClientBoard slug="test" />;
 }
