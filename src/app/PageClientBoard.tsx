@@ -564,18 +564,29 @@ useEffect(() => {
 // rol efectivo: si editor + readOnly => se comporta como viewer
 const effectiveRole = (role === "editor" && readOnly) ? "viewer" : role;
 
-  // Semana (L-V) en ISO
-  const dayKeys = useMemo(() => {
-    const days: string[] = [];
-    for (let i = 0; i < 5; i++) days.push(toISODate(addDays(weekStart, i)));
-    return days;
-  }, [weekStart]);
+ // Semana (L-V) en ISO (semana visible)
+const dayKeys = useMemo(() => {
+  const days: string[] = [];
+  for (let i = 0; i < 5; i++) days.push(toISODate(addDays(weekStart, i)));
+  return days;
+}, [weekStart]);
 
-const activeDayKey = useMemo(() => getActiveDayISO(), [weekStart]);
+// Día activo REAL (hoy, ajustado fin de semana) — NO depende de weekStart
+const activeDayKey = useMemo(() => getActiveDayISO(), []);
+
+// (ya no dependemos de dayNames para el header, pero puedes dejarlo si lo usas en otra cosa)
 const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 
-type ExportMode = 'all' | 'today' | 'week' | 'range';
+// Helper robusto: nombre del día desde la fecha ISO (evita el bug de idx=-1 → "Lunes")
+function weekdayES(iso: string) {
+  // T12:00 evita “bailes” raros por timezone/DST
+  const s = new Intl.DateTimeFormat('es-ES', { weekday: 'long' }).format(
+    new Date(`${iso}T12:00:00`)
+  );
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
+type ExportMode = 'all' | 'today' | 'week' | 'range';
 const [exportMode, setExportMode] = useState<ExportMode>('week');
 const [rangeFrom, setRangeFrom] = useState<string>(''); // YYYY-MM-DD
 const [rangeTo, setRangeTo] = useState<string>('');     // YYYY-MM-DD
@@ -590,15 +601,17 @@ useEffect(() => {
 const [isMobilePortrait, setIsMobilePortrait] = useState(false);
 
 useEffect(() => {
-  const mq = window.matchMedia("(max-width: 640px) and (orientation: portrait)");
+  if (typeof window === 'undefined') return;
+
+  const mq = window.matchMedia('(max-width: 640px) and (orientation: portrait)');
 
   const update = () => setIsMobilePortrait(mq.matches);
   update();
 
   // compat: Safari viejo usa addListener/removeListener
-  if ("addEventListener" in mq) {
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+  if ('addEventListener' in mq) {
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
   } else {
     // @ts-ignore
     mq.addListener(update);
@@ -615,25 +628,22 @@ const visibleDayKeys = useMemo(() => {
   return dayKeys;
 }, [isMobilePortrait, activeDayKey, dayKeys]);
 
-const visibleDayNames = useMemo(() => {
-  // dayNames corresponde a dayKeys (L-V)
-  if (!isMobilePortrait) return dayNames;
-
-  // en portrait, buscamos el índice de activeDayKey dentro de dayKeys
-  const idx = dayKeys.indexOf(activeDayKey);
-  return [dayNames[Math.max(0, idx)] ?? "Hoy"];
-}, [isMobilePortrait, activeDayKey, dayKeys]);
+// ✅ Esto sustituye a visibleDayNames: siempre correcto (aunque activeDayKey no esté en dayKeys)
+const visibleDayLabels = useMemo(() => {
+  return visibleDayKeys.map((dk) => weekdayES(dk));
+}, [visibleDayKeys]);
 
 const unsubRef = useRef<null | (() => void)>(null);
 const rejoinBusyRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+const refresh = useCallback(async () => {
   if (!centerId) return;
 
   // si estamos offline, ni lo intentes
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
   try {
+    // seguimos cargando la semana visible (dayKeys[0] = lunes de esa semana)
     const data = await listWeek(centerId, dayKeys[0]);
     setItems(data as any);
   } catch (e) {
