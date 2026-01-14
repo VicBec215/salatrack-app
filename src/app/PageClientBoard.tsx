@@ -438,7 +438,7 @@ function Header({
             {centerName || 'Cargando centro...'}
           </div>
           <div className="text-xs text-gray-500">
-            {openRoomsToday == null ? 'Salas abiertas hoy: —' : `Salas abiertas hoy: ${openRoomsToday}`}
+            {openRoomsToday == null ? 'Salas disponibles: —' : `Salas disponibles: ${openRoomsToday}`}
           </div>
         </div>
       </div>
@@ -1429,7 +1429,9 @@ function RowBlock({
     <span
       className={[
         'inline-flex items-center px-2 py-1 rounded-md text-xs border',
-        tone === 'green' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-700',
+        tone === 'green' 
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-400/40'
+        : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-white/40',
       ].join(' ')}
     >
       {children}
