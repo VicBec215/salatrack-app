@@ -489,6 +489,8 @@ function AuthButtons() {
 
       setEmail('');
       setPass('');
+        // ✅ avisa al board de que ya hay sesión
+    window.dispatchEvent(new Event('salatrack:signedin'));
     } catch (e) {
       showErr(e);
     }
@@ -712,53 +714,74 @@ const refresh = useCallback(async () => {
 
   // 3) polling de seguridad
   const poll = setInterval(() => {
-  console.log('[POLL] tick');
-  void refreshSafe();
-}, 20_000);
+    console.log('[POLL] tick');
+    void refreshSafe();
+  }, 20_000);
 
   // 4) rejoin tras reposo / volver a pestaña / volver online
   const rejoin = async () => {
-  if (!alive) return;
-  if (rejoinBusyRef.current) return;
+    if (!alive) return;
+    if (rejoinBusyRef.current) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
+    rejoinBusyRef.current = true;
+    console.log('[RECOVER] begin');
+
+    try {
+      await new Promise((r) => setTimeout(r, 700));
+
+      // refresca sesión (con retry)
+      try {
+        await retry(() => supabase.auth.refreshSession(), 4, 500);
+      } catch (e) {
+        console.warn('[RECOVER] refreshSession failed (will still try data)', e);
+      }
+
+      // reinicia realtime
+      try {
+        supabase.realtime.disconnect();
+      } catch {}
+      try {
+        supabase.realtime.connect();
+      } catch {}
+
+      // re-suscribe canal realtime
+      try {
+        unsubRef.current?.();
+        unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
+      } catch (e) {
+        console.warn('[RECOVER] resubscribe realtime failed', e);
+      }
+
+      // refresh datos sí o sí
+      await refreshSafe();
+      console.log('[RECOVER] done');
+    } finally {
+      setTimeout(() => {
+        rejoinBusyRef.current = false;
+      }, 800);
+    }
+  };
+
+  // ✅ NUEVO: tras login, recalcula role y fuerza rejoin/refresh
+  // ✅ NUEVO: tras login, fuerza rejoin/refresh sin depender de slug/setRole
+const onSignedIn = async () => {
+  if (!alive) return;
+
+  // si estamos offline, ni lo intentes
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
-  rejoinBusyRef.current = true;
-  console.log('[RECOVER] begin');
-
   try {
-    await new Promise((r) => setTimeout(r, 700));
-
-    // refresca sesión (con retry)
+    // por si la sesión tarda un pelín en asentarse
     try {
-      await retry(() => supabase.auth.refreshSession(), 4, 500);
-    } catch (e) {
-      console.warn('[RECOVER] refreshSession failed (will still try data)', e);
-    }
-
-    // reinicia realtime
-    try {
-      supabase.realtime.disconnect();
-    } catch {}
-    try {
-      supabase.realtime.connect();
+      await retry(() => supabase.auth.refreshSession(), 2, 300);
     } catch {}
 
-    // re-suscribe canal realtime
-    try {
-      unsubRef.current?.();
-      unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
-    } catch (e) {
-      console.warn('[RECOVER] resubscribe realtime failed', e);
-    }
-
-    // refresh datos sí o sí
-    await refreshSafe();
-    console.log('[RECOVER] done');
-  } finally {
-    setTimeout(() => {
-      rejoinBusyRef.current = false;
-    }, 800);
+    // fuerza rejoin (realtime + refresh)
+    await rejoin();
+  } catch (e) {
+    console.warn('[SIGNEDIN] failed', e);
+    void refreshSafe();
   }
 };
 
