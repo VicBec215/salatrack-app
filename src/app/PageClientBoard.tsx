@@ -413,15 +413,8 @@ function Header({
   openRoomsToday: number | null;
 }) {
   return (
-    <div
-      className="
-        mb-4
-        grid grid-cols-[1fr_auto]
-        gap-x-3 gap-y-2
-        items-start
-      "
-    >
-      {/* IZQUIERDA (siempre arriba-izq) */}
+    <div className="mb-4 flex items-start justify-between gap-3">
+      {/* IZQUIERDA */}
       <div className="flex items-center gap-4 min-w-0">
         <Link
           href="https://www.salatrack.app"
@@ -450,24 +443,18 @@ function Header({
         </div>
       </div>
 
-      {/* DERECHA arriba (badge siempre a la derecha) */}
-      <div className="flex justify-end">
+      {/* DERECHA: badge + auth, SIEMPRE en la misma fila */}
+      <div className="ml-auto flex items-center gap-2 shrink-0">
         <span
           className="
-            text-sm px-2 py-1 rounded-full border whitespace-nowrap
+            text-sm px-2 py-1 rounded-full border
             bg-white text-gray-700 border-gray-300
             dark:bg-gray-900 dark:text-gray-200 dark:border-gray-600
           "
         >
           {role === 'editor' ? 'Editor' : role === 'viewer' ? 'Solo lectura' : 'No autenticado'}
         </span>
-      </div>
 
-      {/* AuthButtons:
-          - En móvil: baja a una segunda fila y ocupa todo el ancho (no se apelotona)
-          - En sm+: vuelve a la derecha en la misma fila del badge
-      */}
-      <div className="col-span-2 sm:col-span-1 sm:col-start-2 flex justify-end">
         <AuthButtons />
       </div>
     </div>
@@ -536,18 +523,22 @@ function AuthButtons() {
   // Usuario autenticado
   // ─────────────────────────────────────────────
   if (userEmail) {
-    return (
-      <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
-        <span className="text-xs text-gray-500 hidden sm:inline">{userEmail}</span>
-        <button
-          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
-          onClick={signOut}
-        >
-          Salir
-        </button>
-      </div>
-    );
-  }
+  return (
+    <div className="flex items-center gap-2">
+      {/* Email solo en sm+ para que en móvil no “ensucie” */}
+      <span className="text-xs text-gray-500 dark:text-gray-300 hidden sm:inline">
+        {userEmail}
+      </span>
+
+      <button
+        className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+        onClick={signOut}
+      >
+        Salir
+      </button>
+    </div>
+  );
+}
 
   // ─────────────────────────────────────────────
   // Login (responsive + ENTER)
