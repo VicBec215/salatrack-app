@@ -413,7 +413,7 @@ function Header({
   openRoomsToday: number | null;
 }) {
   return (
-    <div className="mb-4 flex items-start justify-between">
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       {/* IZQUIERDA */}
       <div className="flex items-center gap-4">
         <Link
@@ -444,7 +444,7 @@ function Header({
       </div>
 
       {/* DERECHA */}
-      <div className="flex items-center gap-2">
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
         <span
   className="
     text-sm px-2 py-1 rounded-full border
@@ -485,32 +485,32 @@ function AuthButtons() {
   }, []);
 
   const signIn = async () => {
-  try {
-    if (!email || !pass) {
-      alert('Introduce email y contraseña');
-      return;
+    try {
+      if (!email || !pass) {
+        alert('Introduce email y contraseña');
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pass,
+      });
+      if (error) throw error;
+
+      setEmail('');
+      setPass('');
+
+      // ✅ avisa al Board de que ya hay sesión
+      if (typeof window !== 'undefined') {
+        // pequeño delay para que Supabase asiente la sesión
+        setTimeout(() => {
+          window.dispatchEvent(new Event('salatrack:signedin'));
+        }, 0);
+      }
+    } catch (e) {
+      showErr(e);
     }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password: pass,
-    });
-    if (error) throw error;
-
-    setEmail('');
-    setPass('');
-
-    // ✅ avisa al Board de que ya hay sesión
-    if (typeof window !== 'undefined') {
-      // pequeño delay para que Supabase asiente la sesión
-      setTimeout(() => {
-        window.dispatchEvent(new Event('salatrack:signedin'));
-      }, 0);
-    }
-  } catch (e) {
-    showErr(e);
-  }
-};
+  };
 
   const signOut = async () => {
     try {
@@ -527,12 +527,10 @@ function AuthButtons() {
   // ─────────────────────────────────────────────
   if (userEmail) {
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500 hidden sm:inline">
-          {userEmail}
-        </span>
+      <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
+        <span className="text-xs text-gray-500 hidden sm:inline">{userEmail}</span>
         <button
-          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50"
+          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
           onClick={signOut}
         >
           Salir
@@ -542,32 +540,39 @@ function AuthButtons() {
   }
 
   // ─────────────────────────────────────────────
-  // Login (ENTER funciona)
+  // Login (responsive + ENTER)
   // ─────────────────────────────────────────────
   return (
     <form
-      className="flex items-center gap-2"
+      className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center"
       onSubmit={(e) => {
         e.preventDefault(); // evita reload
-        signIn();
+        void signIn();
       }}
     >
-      <input
-        className="w-[140px] sm:w-[180px] border rounded-lg px-2 py-1 text-sm"
-        placeholder="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        className="w-[120px] sm:w-[140px] border rounded-lg px-2 py-1 text-sm"
-        placeholder="password"
-        type="password"
-        value={pass}
-        onChange={(e) => setPass(e.target.value)}
-      />
+      {/* Inputs: en móvil ocupan el ancho y no se pisan */}
+      <div className="flex w-full gap-2 sm:w-auto">
+        <input
+          className="min-w-0 flex-1 border rounded-lg px-2 py-1 text-sm"
+          placeholder="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+        />
+        <input
+          className="min-w-0 flex-1 border rounded-lg px-2 py-1 text-sm"
+          placeholder="password"
+          type="password"
+          value={pass}
+          onChange={(e) => setPass(e.target.value)}
+          autoComplete="current-password"
+        />
+      </div>
+
+      {/* Botón: en móvil full width, en desktop tamaño normal */}
       <button
         type="submit"
-        className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50"
+        className="w-full sm:w-auto px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
       >
         Entrar
       </button>
