@@ -476,8 +476,17 @@ function AuthButtons() {
 
   const signIn = async () => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (!email || !pass) {
+        alert('Introduce email y contraseña');
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pass,
+      });
       if (error) throw error;
+
       setEmail('');
       setPass('');
     } catch (e) {
@@ -495,19 +504,36 @@ function AuthButtons() {
     }
   };
 
+  // ─────────────────────────────────────────────
+  // Usuario autenticado
+  // ─────────────────────────────────────────────
   if (userEmail) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500 hidden sm:inline">{userEmail}</span>
-        <button className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50" onClick={signOut}>
+        <span className="text-xs text-gray-500 hidden sm:inline">
+          {userEmail}
+        </span>
+        <button
+          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50"
+          onClick={signOut}
+        >
           Salir
         </button>
       </div>
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Login (ENTER funciona)
+  // ─────────────────────────────────────────────
   return (
-    <div className="flex items-center gap-2">
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault(); // evita reload
+        signIn();
+      }}
+    >
       <input
         className="w-[140px] sm:w-[180px] border rounded-lg px-2 py-1 text-sm"
         placeholder="email"
@@ -521,10 +547,13 @@ function AuthButtons() {
         value={pass}
         onChange={(e) => setPass(e.target.value)}
       />
-      <button className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50" onClick={signIn}>
+      <button
+        type="submit"
+        className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50"
+      >
         Entrar
       </button>
-    </div>
+    </form>
   );
 }
 
