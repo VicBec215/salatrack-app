@@ -468,6 +468,9 @@ function AuthButtons() {
   const [pass, setPass] = useState('');
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // ✅ NUEVO: modal login (solo móvil)
+  const [open, setOpen] = useState(false);
+
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -497,6 +500,9 @@ function AuthButtons() {
       setEmail('');
       setPass('');
 
+      // ✅ cierra modal si estaba abierto
+      setOpen(false);
+
       // ✅ avisa al Board de que ya hay sesión
       if (typeof window !== 'undefined') {
         // pequeño delay para que Supabase asiente la sesión
@@ -523,61 +529,142 @@ function AuthButtons() {
   // Usuario autenticado
   // ─────────────────────────────────────────────
   if (userEmail) {
-  return (
-    <div className="flex items-center gap-2">
-      {/* Email solo en sm+ para que en móvil no “ensucie” */}
-      <span className="text-xs text-gray-500 dark:text-gray-300 hidden sm:inline">
-        {userEmail}
-      </span>
+    return (
+      <div className="flex items-center gap-2">
+        {/* Email solo en sm+ para que en móvil no “ensucie” */}
+        <span className="text-xs text-gray-500 dark:text-gray-300 hidden sm:inline">
+          {userEmail}
+        </span>
 
-      <button
-        className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
-        onClick={signOut}
+        <button
+          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                     dark:border-gray-600 dark:text-gray-100"
+          onClick={signOut}
+        >
+          Salir
+        </button>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // NO autenticado
+  // Desktop: formulario inline
+  // Móvil: botón + modal
+  // ─────────────────────────────────────────────
+  return (
+    <>
+      {/* DESKTOP (>= sm): formulario inline */}
+      <form
+        className="hidden sm:flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void signIn();
+        }}
       >
-        Salir
-      </button>
-    </div>
-  );
-}
-
-  // ─────────────────────────────────────────────
-  // Login (responsive + ENTER)
-  // ─────────────────────────────────────────────
-  return (
-    <form
-      className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center"
-      onSubmit={(e) => {
-        e.preventDefault(); // evita reload
-        void signIn();
-      }}
-    >
-      {/* Inputs: en móvil ocupan el ancho y no se pisan */}
-      <div className="flex w-full gap-2 sm:w-auto">
         <input
-          className="min-w-0 flex-1 border rounded-lg px-2 py-1 text-sm"
+          className="w-[180px] border rounded-lg px-2 py-1 text-sm
+                     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
           placeholder="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
         />
         <input
-          className="min-w-0 flex-1 border rounded-lg px-2 py-1 text-sm"
+          className="w-[140px] border rounded-lg px-2 py-1 text-sm
+                     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
           placeholder="password"
           type="password"
           value={pass}
           onChange={(e) => setPass(e.target.value)}
           autoComplete="current-password"
         />
+        <button
+          type="submit"
+          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                     dark:border-gray-600 dark:text-gray-100"
+        >
+          Entrar
+        </button>
+      </form>
+
+      {/* MÓVIL (< sm): botón compacto */}
+      <div className="sm:hidden">
+        <button
+          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                     dark:border-gray-600 dark:text-gray-100"
+          onClick={() => setOpen(true)}
+        >
+          Entrar
+        </button>
       </div>
 
-      {/* Botón: en móvil full width, en desktop tamaño normal */}
-      <button
-        type="submit"
-        className="w-full sm:w-auto px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
-      >
-        Entrar
-      </button>
-    </form>
+      {/* MODAL móvil */}
+      {open && (
+        <div className="fixed inset-0 z-50">
+          {/* overlay */}
+          <button
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setOpen(false)}
+            aria-label="Cerrar"
+          />
+          {/* panel */}
+          <div
+            className="absolute left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2
+                       rounded-2xl border bg-white p-4 shadow-xl
+                       dark:bg-gray-950 dark:border-gray-700"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-semibold text-sm dark:text-gray-100">
+                Iniciar sesión
+              </div>
+              <button
+                className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                           dark:border-gray-600 dark:text-gray-100"
+                onClick={() => setOpen(false)}
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              className="flex flex-col gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void signIn();
+              }}
+            >
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm
+                           dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                placeholder="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                autoFocus
+              />
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm
+                           dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                placeholder="password"
+                type="password"
+                value={pass}
+                onChange={(e) => setPass(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button
+                type="submit"
+                className="mt-1 w-full px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                           dark:border-gray-600 dark:text-gray-100"
+              >
+                Entrar
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
