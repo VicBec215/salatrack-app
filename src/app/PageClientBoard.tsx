@@ -1098,27 +1098,95 @@ const doToggleDone = async (it: Item) => {
   };
 const moveDayLeft = async (it: Item) => {
   const idx = dayKeys.indexOf(it.day);
-  if (idx <= 0) return;
-  const destDay = dayKeys[idx - 1];
-  try {
-    await updateItem(it.id, { day: destDay } as any);
-    await refresh();
-  } catch (e) {
-    showErr(e);
+
+  // 🔹 Caso normal: dentro de la semana visible
+  if (idx > 0) {
+    const destDay = dayKeys[idx - 1];
+    try {
+      await updateItem(it.id, { day: destDay } as any);
+      await refresh();
+    } catch (e) {
+      showErr(e);
+    }
+    return;
+  }
+
+  // 🔹 NUEVO: lunes → viernes anterior
+  if (idx === 0) {
+    const destDay = prevBusinessDayISO(it.day);
+    try {
+      await updateItem(it.id, { day: destDay } as any);
+      await refresh();
+    } catch (e) {
+      showErr(e);
+    }
   }
 };
 
 const moveDayRight = async (it: Item) => {
   const idx = dayKeys.indexOf(it.day);
-  if (idx < 0 || idx >= dayKeys.length - 1) return;
-  const destDay = dayKeys[idx + 1];
-  try {
-    await updateItem(it.id, { day: destDay } as any);
-    await refresh();
-  } catch (e) {
-    showErr(e);
+
+  // 🔹 Caso normal: dentro de la semana visible
+  if (idx >= 0 && idx < dayKeys.length - 1) {
+    const destDay = dayKeys[idx + 1];
+    try {
+      await updateItem(it.id, { day: destDay } as any);
+      await refresh();
+    } catch (e) {
+      showErr(e);
+    }
+    return;
+  }
+
+  // 🔹 NUEVO: viernes → lunes siguiente
+  if (idx === dayKeys.length - 1) {
+    const destDay = nextBusinessDayISO(it.day);
+    try {
+      await updateItem(it.id, { day: destDay } as any);
+      await refresh();
+    } catch (e) {
+      showErr(e);
+    }
   }
 };
+
+//Función para que pase de viernes a lunes y de lunes a viernes
+function parseISODate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function nextBusinessDayISO(iso: string) {
+  const dt = parseISODate(iso);
+  const dow = dt.getDay(); // 0 dom, 1 lun, ... 5 vie, 6 sab
+
+  // Vie → Lun
+  if (dow === 5) dt.setDate(dt.getDate() + 3);
+  // Sab → Lun
+  else if (dow === 6) dt.setDate(dt.getDate() + 2);
+  // Dom → Lun
+  else if (dow === 0) dt.setDate(dt.getDate() + 1);
+  // Lun–Jue → día siguiente
+  else dt.setDate(dt.getDate() + 1);
+
+  return toISODate(dt);
+}
+
+function prevBusinessDayISO(iso: string) {
+  const dt = parseISODate(iso);
+  const dow = dt.getDay();
+
+  // Lun → Vie
+  if (dow === 1) dt.setDate(dt.getDate() - 3);
+  // Dom → Vie
+  else if (dow === 0) dt.setDate(dt.getDate() - 2);
+  // Sab → Vie
+  else if (dow === 6) dt.setDate(dt.getDate() - 1);
+  // Mar–Vie → día anterior
+  else dt.setDate(dt.getDate() - 1);
+
+  return toISODate(dt);
+}
 
 function getActiveDayISO(): string {
   const today = new Date();
