@@ -475,26 +475,32 @@ function AuthButtons() {
   }, []);
 
   const signIn = async () => {
-    try {
-      if (!email || !pass) {
-        alert('Introduce email y contraseña');
-        return;
-      }
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password: pass,
-      });
-      if (error) throw error;
-
-      setEmail('');
-      setPass('');
-        // ✅ avisa al board de que ya hay sesión
-    window.dispatchEvent(new Event('salatrack:signedin'));
-    } catch (e) {
-      showErr(e);
+  try {
+    if (!email || !pass) {
+      alert('Introduce email y contraseña');
+      return;
     }
-  };
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: pass,
+    });
+    if (error) throw error;
+
+    setEmail('');
+    setPass('');
+
+    // ✅ avisa al Board de que ya hay sesión
+    if (typeof window !== 'undefined') {
+      // pequeño delay para que Supabase asiente la sesión
+      setTimeout(() => {
+        window.dispatchEvent(new Event('salatrack:signedin'));
+      }, 0);
+    }
+  } catch (e) {
+    showErr(e);
+  }
+};
 
   const signOut = async () => {
     try {
@@ -763,7 +769,6 @@ const refresh = useCallback(async () => {
     }
   };
 
-  // ✅ NUEVO: tras login, recalcula role y fuerza rejoin/refresh
   // ✅ NUEVO: tras login, fuerza rejoin/refresh sin depender de slug/setRole
 const onSignedIn = async () => {
   if (!alive) return;
@@ -790,21 +795,27 @@ const onSignedIn = async () => {
   };
 
   window.addEventListener('focus', rejoin);
-  window.addEventListener('online', rejoin);
-  document.addEventListener('visibilitychange', onVis);
+window.addEventListener('online', rejoin);
+document.addEventListener('visibilitychange', onVis);
 
-  return () => {
-    alive = false;
+// ✅ NUEVO
+window.addEventListener('salatrack:signedin', onSignedIn);
 
-    window.removeEventListener('focus', rejoin);
-    window.removeEventListener('online', rejoin);
-    document.removeEventListener('visibilitychange', onVis);
+return () => {
+  alive = false;
 
-    clearInterval(poll);
+  window.removeEventListener('focus', rejoin);
+  window.removeEventListener('online', rejoin);
+  document.removeEventListener('visibilitychange', onVis);
 
-    unsubRef.current?.();
-    unsubRef.current = null;
-  };
+  // ✅ NUEVO
+  window.removeEventListener('salatrack:signedin', onSignedIn);
+
+  clearInterval(poll);
+
+  unsubRef.current?.();
+  unsubRef.current = null;
+};
 }, [centerId, refresh]);
 
   const filteredItems = useMemo(() => {
