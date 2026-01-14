@@ -413,59 +413,63 @@ function Header({
   openRoomsToday: number | null;
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      {/* FILA SUPERIOR (móvil): izquierda + derecha */}
-      <div className="flex items-start justify-between gap-3">
-        {/* IZQUIERDA */}
-        <div className="flex items-center gap-4 min-w-0">
-          <Link
-            href="https://www.salatrack.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Ir a SalaTrack"
-            className="shrink-0"
-          >
-            <Image
-              src="/salatrack-logo.svg"
-              alt="SalaTrack"
-              width={32}
-              height={32}
-              className="cursor-pointer hover:opacity-90 transition-opacity"
-              priority
-            />
-          </Link>
+    <div
+      className="
+        mb-4
+        grid grid-cols-[1fr_auto]
+        gap-x-3 gap-y-2
+        items-start
+      "
+    >
+      {/* IZQUIERDA (siempre arriba-izq) */}
+      <div className="flex items-center gap-4 min-w-0">
+        <Link
+          href="https://www.salatrack.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Ir a SalaTrack"
+          className="shrink-0"
+        >
+          <Image
+            src="/salatrack-logo.svg"
+            alt="SalaTrack"
+            width={32}
+            height={32}
+            className="cursor-pointer hover:opacity-90 transition-opacity"
+            priority
+          />
+        </Link>
 
-          <div className="flex flex-col min-w-0">
-            <div className="text-xl font-semibold leading-tight text-blue-900 dark:text-blue-200 truncate">
-              {centerName || 'Cargando centro...'}
-            </div>
-            <div className="text-xs text-gray-500 dark:text-gray-300">
-              {openRoomsToday == null
-                ? 'Salas abiertas hoy: —'
-                : `Salas abiertas hoy: ${openRoomsToday}`}
-            </div>
+        <div className="flex flex-col min-w-0">
+          <div className="text-xl font-semibold leading-tight text-blue-900 dark:text-blue-200 truncate">
+            {centerName || 'Cargando centro...'}
           </div>
-        </div>
-
-        {/* DERECHA (móvil): rol + auth a la derecha */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          <span className="text-sm px-2 py-1 border rounded-full bg-white text-gray-800 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700">
-            {role === 'editor'
-              ? 'Editor'
-              : role === 'viewer'
-              ? 'Solo lectura'
-              : 'No autenticado'}
-          </span>
-
-          {/* AuthButtons ya es responsive; aquí solo lo alineamos */}
-          <div className="flex justify-end w-full">
-            <AuthButtons />
+          <div className="text-xs text-gray-500 dark:text-gray-300">
+            {openRoomsToday == null ? 'Salas disponibles: —' : `Salas disponibles: ${openRoomsToday}`}
           </div>
         </div>
       </div>
 
-      {/* En desktop, mantiene el layout original (la fila superior ya se comporta bien).
-          Este bloque extra no hace falta; sm:flex-row arriba lo gestiona. */}
+      {/* DERECHA arriba (badge siempre a la derecha) */}
+      <div className="flex justify-end">
+        <span
+          className="
+            text-sm px-2 py-1 rounded-full border whitespace-nowrap
+            bg-white text-gray-700 border-gray-300
+            dark:bg-gray-900 dark:text-gray-200 dark:border-gray-600
+          "
+        >
+          {role === 'editor' ? 'Editor' : role === 'viewer' ? 'Solo lectura' : 'No autenticado'}
+        </span>
+      </div>
+
+      {/* AuthButtons:
+          - En móvil: baja a una segunda fila y ocupa todo el ancho (no se apelotona)
+          - En sm+: vuelve a la derecha en la misma fila del badge
+      */}
+      <div className="col-span-2 sm:col-span-1 sm:col-start-2 flex justify-end">
+        <AuthButtons />
+      </div>
     </div>
   );
 }
