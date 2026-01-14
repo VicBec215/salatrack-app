@@ -1183,21 +1183,23 @@ function formatDateES(iso: string) {
   <div className="text-xs text-gray-500 font-semibold">Sala</div>
 
   {visibleDayKeys.map((dk, idx) => {
-    const isToday = dk === activeDayKey;
+  const isToday = dk === activeDayKey;
 
-    return (
-      <div
-        key={dk}
-        className={[
-          'text-xs font-semibold text-center rounded-lg py-1 border',
-          isToday ? 'bg-rose-50 text-rose-700 border-rose-200' : 'text-gray-500 border-transparent',
-        ].join(' ')}
-      >
-        <div>{dayNames[idx]}</div>
-        <div className="text-[11px] font-normal text-gray-400">{formatDateES(dk)}</div>
-      </div>
-    );
-  })}
+  return (
+    <div
+      key={dk}
+      className={[
+        'text-xs font-semibold text-center rounded-lg py-1 border',
+        isToday
+          ? 'bg-rose-50 text-rose-700 border-rose-200'
+          : 'text-gray-500 border-transparent',
+      ].join(' ')}
+    >
+      <div>{weekdayES(dk)}</div>
+      <div className="text-[11px] font-normal text-gray-400">{formatDateES(dk)}</div>
+    </div>
+  );
+})}
 
   {/* aquí ya siguen tus RowBlock(...) */}
 
