@@ -1440,7 +1440,7 @@ function RowBlock({
 
   return (
     <>
-      <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">{row}</div>
+      <div className="border border-gray-200 dark:border-white/30 rounded-lg p-2 text-sm font-semibold bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-100">{row}</div>
 
       {dayKeys.map((dk: string) => {
         const cellKey = `${dk}__${row}`;
