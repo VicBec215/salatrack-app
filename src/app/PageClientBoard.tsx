@@ -445,9 +445,19 @@ function Header({
 
       {/* DERECHA */}
       <div className="flex items-center gap-2">
-        <span className="text-sm px-2 py-1 border rounded-full bg-white">
-          {role === 'editor' ? 'Editor' : role === 'viewer' ? 'Solo lectura' : 'No autenticado'}
-        </span>
+        <span
+  className="
+    text-sm px-2 py-1 rounded-full border
+    bg-white text-gray-700 border-gray-300
+    dark:bg-gray-900 dark:text-gray-200 dark:border-gray-600
+  "
+>
+  {role === 'editor'
+    ? 'Editor'
+    : role === 'viewer'
+    ? 'Solo lectura'
+    : 'No autenticado'}
+</span>
         <AuthButtons />
       </div>
     </div>
@@ -1321,7 +1331,12 @@ function formatDateES(iso: string) {
 >
 <div className="flex items-center">
   <select
-    className="w-full border rounded-lg px-2 py-1 text-xs bg-white"
+    className="
+    border rounded px-2 py-1 text-xs
+    text-gray-700 dark:text-gray-200
+    bg-white dark:bg-gray-900
+    border-gray-300 dark:border-gray-600
+    "
     value={roomFilter}
     onChange={(e) => setRoomFilter(e.target.value as RowKey)}
     title="Filtrar por sala"
@@ -1423,7 +1438,7 @@ function RowBlock({
 
   return (
     <>
-      <div className="border rounded-lg p-2 text-sm font-semibold bg-gray-50">{row}</div>
+      <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">{row}</div>
 
       {dayKeys.map((dk: string) => {
         const cellKey = `${dk}__${row}`;
