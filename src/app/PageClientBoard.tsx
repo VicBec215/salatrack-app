@@ -561,6 +561,14 @@ useEffect(() => {
   localStorage.setItem('salatrack_readonly', readOnly ? '1' : '0');
 }, [readOnly]);
 
+// Filtro de sala
+const [roomFilter, setRoomFilter] = useState<RowKey>('__all__');
+const visibleRows = useMemo(() => {
+  if (roomFilter === '__all__') return rows;
+  return rows.filter((r) => r === roomFilter);
+}, [rows, roomFilter]);
+
+
 // rol efectivo: si editor + readOnly => se comporta como viewer
 const effectiveRole = (role === "editor" && readOnly) ? "viewer" : role;
 
@@ -1180,7 +1188,21 @@ function formatDateES(iso: string) {
       : "grid-cols-[80px_repeat(5,minmax(0,1fr))]",
   ].join(" ")}
 >
-  <div className="text-xs text-gray-500 font-semibold">Sala</div>
+<div className="flex items-center">
+  <select
+    className="w-full border rounded-lg px-2 py-1 text-xs bg-white"
+    value={roomFilter}
+    onChange={(e) => setRoomFilter(e.target.value as RowKey)}
+    title="Filtrar por sala"
+  >
+    <option value="__all__">Todas</option>
+    {rows.map((r) => (
+      <option key={r} value={r}>
+        {r}
+      </option>
+    ))}
+  </select>
+</div>
 
   {visibleDayKeys.map((dk, idx) => {
   const isToday = dk === activeDayKey;
@@ -1204,7 +1226,7 @@ function formatDateES(iso: string) {
   {/* aquí ya siguen tus RowBlock(...) */}
 
 
-        {rows.map((row) => (
+        {visibleRows.map((row) => (
           <RowBlock
             key={row}
             role={effectiveRole}
