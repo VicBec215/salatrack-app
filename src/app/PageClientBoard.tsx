@@ -1488,8 +1488,8 @@ function RowBlock({
                   className={[
   'border rounded-xl p-3 shadow-sm transition-colors',
   it.done
-    ? 'bg-gray-100 border-gray-200 opacity-80'
-    : 'bg-white'
+    ? 'bg-gray-100 border-gray-200 opacity-80 dark:bg-gray-800 dark:border-gray-700'
+    : 'bg-white dark:bg-gray-900'
 ].join(' ')}
                 >
                  {/* Barra de comandos (puede envolver a 2 líneas) */}
@@ -1500,8 +1500,8 @@ function RowBlock({
     </div>
 
     {/* ✅ Hecho: visible y clicable también en viewer */}
-    <button className="p-1 rounded hover:bg-gray-100" title="Hecho" onClick={() => doToggleDone(it)}>
-      {it.done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+    <button className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Hecho" onClick={() => doToggleDone(it)}>
+      {it.done ? <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="w-4 h-4 text-gray-500 dark:text-gray-30" />}
     </button>
 
     {/* ✅ Todo lo demás SOLO si editor, manteniendo el orden */}
@@ -1545,7 +1545,7 @@ function RowBlock({
 </div>
 
                   {/* Nombre */}
-                  <div className="mt-2 text-sm font-semibold break-words">{it.name}</div>
+                  <div className="mt-2 text-sm font-semibold break-words text-gray-900 dark:text-gray-100">{it.name}</div>
 
                   {/* Chips */}
                   <div className="mt-2 flex flex-wrap gap-2">
