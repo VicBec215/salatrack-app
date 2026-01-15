@@ -799,7 +799,7 @@ const refresh = useCallback(async () => {
   }
 }, [dayKeys, centerId]);
 
-  useEffect(() => {
+useEffect(() => {
   if (!centerId) return;
 
   let alive = true;
@@ -872,53 +872,44 @@ const refresh = useCallback(async () => {
     }
   };
 
-  // ✅ NUEVO: tras login, fuerza rejoin/refresh sin depender de slug/setRole
-const onSignedIn = async () => {
-  if (!alive) return;
+  // ✅ tras login modal: fuerza rejoin/refresh
+  const onSignedIn = () => {
+    console.log('[RECOVER] signedin event');
+    void rejoin();
+  };
 
-  // si estamos offline, ni lo intentes
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-
-  try {
-    // por si la sesión tarda un pelín en asentarse
-    try {
-      await retry(() => supabase.auth.refreshSession(), 2, 300);
-    } catch {}
-
-    // fuerza rejoin (realtime + refresh)
-    await rejoin();
-  } catch (e) {
-    console.warn('[SIGNEDIN] failed', e);
-    void refreshSafe();
-  }
-};
+  // ✅ extra robusto: si Supabase emite SIGNED_IN / TOKEN_REFRESHED, también rejoin
+  const authSub = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      console.log('[RECOVER] auth event', event);
+      void rejoin();
+    }
+  });
 
   const onVis = () => {
     if (document.visibilityState === 'visible') void rejoin();
   };
 
   window.addEventListener('focus', rejoin);
-window.addEventListener('online', rejoin);
-document.addEventListener('visibilitychange', onVis);
+  window.addEventListener('online', rejoin);
+  document.addEventListener('visibilitychange', onVis);
+  window.addEventListener('salatrack:signedin', onSignedIn);
 
-// ✅ NUEVO
-window.addEventListener('salatrack:signedin', onSignedIn);
+  return () => {
+    alive = false;
 
-return () => {
-  alive = false;
+    window.removeEventListener('focus', rejoin);
+    window.removeEventListener('online', rejoin);
+    document.removeEventListener('visibilitychange', onVis);
+    window.removeEventListener('salatrack:signedin', onSignedIn);
 
-  window.removeEventListener('focus', rejoin);
-  window.removeEventListener('online', rejoin);
-  document.removeEventListener('visibilitychange', onVis);
+    authSub.data.subscription.unsubscribe();
 
-  // ✅ NUEVO
-  window.removeEventListener('salatrack:signedin', onSignedIn);
+    clearInterval(poll);
 
-  clearInterval(poll);
-
-  unsubRef.current?.();
-  unsubRef.current = null;
-};
+    unsubRef.current?.();
+    unsubRef.current = null;
+  };
 }, [centerId, refresh]);
 
   const filteredItems = useMemo(() => {
