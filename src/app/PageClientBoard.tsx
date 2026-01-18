@@ -739,9 +739,20 @@ function addDaysISO(iso: string, delta: number) {
 }
 // cada vez que cambia la semana visible (weekStart → dayKeys), ajusta activeDayKey
 useEffect(() => {
+  const monday = dayKeys[0];
+  const friday = dayKeys[4];
   const today = getActiveDayISO();
-  const next = today >= dayKeys[0] && today <= dayKeys[4] ? today : dayKeys[0];
-  setActiveDayKey(next);
+
+  setActiveDayKey((cur) => {
+    // Si el día actual ya está dentro de la semana visible, lo mantenemos
+    if (cur >= monday && cur <= friday) return cur;
+
+    // Si no, intentamos usar "hoy" si cae en esta semana
+    if (today >= monday && today <= friday) return today;
+
+    // Si no, caemos en lunes
+    return monday;
+  });
 }, [dayKeys]);
 
 // (ya no dependemos de dayNames para el header, pero puedes dejarlo si lo usas en otra cosa)
@@ -993,6 +1004,41 @@ const goToday = () => {
     // semana de hoy
   setWeekStart(startOfWeekMonday(new Date(`${today}T12:00:00`)));  }
 };
+
+const onPrev = () => {
+  if (!isMobilePortrait) {
+    prevWeek();
+    return;
+  }
+
+  // Portrait: día a día (con salto de semana: Lunes -> Viernes de la semana anterior)
+  setActiveDayKey((cur) => {
+    if (cur === dayKeys[0]) {
+      // estamos en lunes -> saltamos a viernes anterior
+      setWeekStart((ws) => addDays(ws, -7));
+      return addDaysISO(cur, -3); // lunes -> viernes anterior
+    }
+    return addDaysISO(cur, -1);
+  });
+};
+
+const onNext = () => {
+  if (!isMobilePortrait) {
+    nextWeek();
+    return;
+  }
+
+  // Portrait: día a día (con salto de semana: Viernes -> Lunes de la semana siguiente)
+  setActiveDayKey((cur) => {
+    if (cur === dayKeys[4]) {
+      // estamos en viernes -> saltamos a lunes siguiente
+      setWeekStart((ws) => addDays(ws, 7));
+      return addDaysISO(cur, 3); // viernes -> lunes siguiente
+    }
+    return addDaysISO(cur, 1);
+  });
+};
+
   const onCancelAdd = () => setDraftCell(null);
 
   const onSubmitAdd = async (
@@ -1359,11 +1405,11 @@ function formatDateES(iso: string) {
     <div className="mt-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
       {/* IZQUIERDA: navegación semana + solo visualización para editor*/}
       <div className="flex items-center gap-2">
-        <button className="p-2 rounded-lg border hover:bg-gray-50" title="Semana anterior" onClick={prevWeek}>
-          <ArrowLeft className="w-4 h-4" />
+        <button className="p-2 rounded-lg border hover:bg-gray-50" title="Anterior" onClick={onPrev}>
+        <ArrowLeft className="w-4 h-4" />
         </button>
-        <button className="p-2 rounded-lg border hover:bg-gray-50" title="Semana siguiente" onClick={nextWeek}>
-          <ArrowRight className="w-4 h-4" />
+        <button className="p-2 rounded-lg border hover:bg-gray-50" title="Siguiente" onClick={onNext}>
+        <ArrowRight className="w-4 h-4" />
         </button>
         <button
           className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2"
