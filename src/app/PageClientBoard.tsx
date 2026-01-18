@@ -817,6 +817,9 @@ const visibleDayLabels = useMemo(() => {
   return visibleDayKeys.map((dk) => weekdayES(dk));
 }, [visibleDayKeys]);
 
+const todayKey = getActiveDayISO(); // día REAL (con ajuste fin de semana)
+
+
 // ✅ (opcional pero recomendado) en móvil vertical, el “rango” sigue al día activo
 useEffect(() => {
   if (!isMobilePortrait) return;
@@ -1537,7 +1540,6 @@ function formatDateES(iso: string) {
 </div>
 
   {visibleDayKeys.map((dk) => {
-  const todayKey = getActiveDayISO(); // día REAL (con ajuste fin de semana)
   const isToday = dk === todayKey;
 
   return (
@@ -1546,8 +1548,8 @@ function formatDateES(iso: string) {
       className={[
         'text-xs font-semibold text-center rounded-lg py-1 border transition-colors',
         isToday
-          ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800'
-          : 'text-gray-500 border-transparent dark:text-gray-300',
+          ? 'bg-rose-50 text-rose-700 border-rose-200'
+          : 'text-gray-500 border-transparent',
       ].join(' ')}
     >
       <div>{weekdayES(dk)}</div>
