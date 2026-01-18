@@ -745,20 +745,10 @@ function addDaysISO(iso: string, delta: number) {
   return toISODate(addDays(new Date(`${iso}T12:00:00`), delta));
 }
 // cada vez que cambia la semana visible (weekStart → dayKeys), ajusta activeDayKey
+// ✅ Mantén el día activo dentro de la semana visible, sin pisarlo a "hoy" o "lunes"
 useEffect(() => {
-  const monday = dayKeys[0];
-  const friday = dayKeys[4];
-  const today = getActiveDayISO();
-
-  // Si "hoy" está dentro de la semana visible, lo ponemos SIEMPRE
-  if (today >= monday && today <= friday) {
-    setActiveDayKey(today);
-    return;
-  }
-
-  // Si no, caemos a lunes visible
-  setActiveDayKey(monday);
-}, [dayKeys]);
+  setActiveDayKey((cur) => clampToWeek(cur));
+}, [dayKeys, clampToWeek]);
 
 // (ya no dependemos de dayNames para el header, pero puedes dejarlo si lo usas en otra cosa)
 const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
@@ -1539,14 +1529,14 @@ function formatDateES(iso: string) {
 </div>
 
   {visibleDayKeys.map((dk) => {
-  const isToday = dk === todayKey;
+  const isHighlighted = dk === todayKey;
 
   return (
     <div
       key={dk}
       className={[
         'text-xs font-semibold text-center rounded-lg py-1 border transition-colors',
-        isToday
+        isHighlighted
           ? 'bg-rose-50 text-rose-700 border-rose-200'
           : 'text-gray-500 border-transparent',
       ].join(' ')}
@@ -1640,6 +1630,18 @@ function RowBlock({
         const isDraftHere = draftCell?.day === dk && draftCell?.row === row;
         const isActiveDay = dk === activeDayKey;
         const isToday = dk === todayKey;
+        
+        const isHighlighted = dk === todayKey;
+
+<div
+  key={cellKey}
+  className={[
+    'border rounded-lg p-2 min-h-[120px] flex flex-col gap-2',
+    isHighlighted
+      ? 'bg-rose-50/40 border-rose-200 dark:bg-rose-500/10 dark:border-rose-300/40'
+      : 'bg-white dark:bg-gray-900/20 border-gray-200 dark:border-white/30',
+  ].join(' ')}
+></div>
 
         return (
           <div
