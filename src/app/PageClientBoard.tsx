@@ -685,9 +685,10 @@ function Board({
   procs: ProcDef[];
   centerId: string | null;
 }) {
-const [weekStart, setWeekStart] = useState(() => {
-  const iso = getActiveDayISO(); // hoy (o viernes si fin de semana)
-  return startOfWeekMonday(new Date(`${iso}T12:00:00`));
+const [weekStart, setWeekStart] = useState<Date>(() => {
+  // Siempre arrancamos en la semana ACTUAL (lunes)
+  // T12:00 evita problemas de timezone/DST
+  return startOfWeekMonday(new Date());
 });
   const [items, setItems] = useState<Item[]>([]);
   const [search, setSearch] = useState('');
@@ -749,16 +750,14 @@ useEffect(() => {
   const friday = dayKeys[4];
   const today = getActiveDayISO();
 
-  setActiveDayKey((cur) => {
-    // Si el día actual ya está dentro de la semana visible, lo mantenemos
-    if (cur >= monday && cur <= friday) return cur;
+  // Si "hoy" está dentro de la semana visible, lo ponemos SIEMPRE
+  if (today >= monday && today <= friday) {
+    setActiveDayKey(today);
+    return;
+  }
 
-    // Si no, intentamos usar "hoy" si cae en esta semana
-    if (today >= monday && today <= friday) return today;
-
-    // Si no, caemos en lunes
-    return monday;
-  });
+  // Si no, caemos a lunes visible
+  setActiveDayKey(monday);
 }, [dayKeys]);
 
 // (ya no dependemos de dayNames para el header, pero puedes dejarlo si lo usas en otra cosa)
