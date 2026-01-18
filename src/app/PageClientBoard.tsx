@@ -685,7 +685,10 @@ function Board({
   procs: ProcDef[];
   centerId: string | null;
 }) {
-  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeekMonday(new Date()));
+const [weekStart, setWeekStart] = useState(() => {
+  const iso = getActiveDayISO(); // hoy (o viernes si fin de semana)
+  return startOfWeekMonday(new Date(`${iso}T12:00:00`));
+});
   const [items, setItems] = useState<Item[]>([]);
   const [search, setSearch] = useState('');
 
