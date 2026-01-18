@@ -722,6 +722,9 @@ const dayKeys = useMemo(() => {
   return days;
 }, [weekStart]);
 
+// ✅ HOY real (con ajuste fin de semana). Úsalo SOLO para resaltar
+const todayKey = useMemo(() => getActiveDayISO(), []);
+
 // ✅ Día activo SELECCIONABLE (necesita ser state para que las flechas funcionen día a día)
 const clampToWeek = useCallback(
   (iso: string) => {
@@ -816,9 +819,6 @@ const visibleDayKeys = useMemo(() => {
 const visibleDayLabels = useMemo(() => {
   return visibleDayKeys.map((dk) => weekdayES(dk));
 }, [visibleDayKeys]);
-
-const todayKey = getActiveDayISO(); // día REAL (con ajuste fin de semana)
-
 
 // ✅ (opcional pero recomendado) en móvil vertical, el “rango” sigue al día activo
 useEffect(() => {
@@ -1587,6 +1587,7 @@ function formatDateES(iso: string) {
             moveDayRight={moveDayRight}
             procs={procs}
             activeDayKey={activeDayKey}
+            todayKey={todayKey}
           />
         ))}
       </div>
@@ -1614,7 +1615,8 @@ function RowBlock({
   moveDayLeft,
   moveDayRight,
   procs,
-  activeDayKey
+  activeDayKey,
+  todayKey
 }: any) {
   const Chip = ({ children, tone = 'gray' }: { children: any; tone?: 'gray' | 'green' }) => (
     <span
@@ -1638,7 +1640,7 @@ function RowBlock({
         const cell = byCell.get(cellKey) ?? [];
         const isDraftHere = draftCell?.day === dk && draftCell?.row === row;
         const isActiveDay = dk === activeDayKey;
-        const isToday = dk === activeDayKey;
+        const isToday = dk === todayKey;
 
         return (
           <div
