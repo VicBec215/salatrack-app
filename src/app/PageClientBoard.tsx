@@ -1536,21 +1536,24 @@ function formatDateES(iso: string) {
   </select>
 </div>
 
-  {visibleDayKeys.map((dk, idx) => {
-  const isToday = dk === activeDayKey;
+  {visibleDayKeys.map((dk) => {
+  const todayKey = getActiveDayISO(); // día REAL (con ajuste fin de semana)
+  const isToday = dk === todayKey;
 
   return (
     <div
       key={dk}
       className={[
-        'text-xs font-semibold text-center rounded-lg py-1 border',
+        'text-xs font-semibold text-center rounded-lg py-1 border transition-colors',
         isToday
-          ? 'bg-rose-50 text-rose-700 border-rose-200'
-          : 'text-gray-500 border-transparent',
+          ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800'
+          : 'text-gray-500 border-transparent dark:text-gray-300',
       ].join(' ')}
     >
       <div>{weekdayES(dk)}</div>
-      <div className="text-[11px] font-normal text-gray-400">{formatDateES(dk)}</div>
+      <div className="text-[11px] font-normal text-gray-400 dark:text-gray-400">
+        {formatDateES(dk)}
+      </div>
     </div>
   );
 })}
