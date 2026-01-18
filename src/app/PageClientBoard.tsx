@@ -1616,7 +1616,7 @@ function RowBlock({
   moveDayRight,
   procs,
   activeDayKey,
-  todayKey
+  todayKey,
 }: any) {
   const Chip = ({ children, tone = 'gray' }: { children: any; tone?: 'gray' | 'green' }) => (
     <span
