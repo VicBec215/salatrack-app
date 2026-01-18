@@ -712,15 +712,37 @@ const visibleRows = useMemo(() => {
 // rol efectivo: si editor + readOnly => se comporta como viewer
 const effectiveRole = (role === "editor" && readOnly) ? "viewer" : role;
 
- // Semana (L-V) en ISO (semana visible)
+// Semana (L-V) en ISO (semana visible)
 const dayKeys = useMemo(() => {
   const days: string[] = [];
   for (let i = 0; i < 5; i++) days.push(toISODate(addDays(weekStart, i)));
   return days;
 }, [weekStart]);
 
-// Día activo REAL (hoy, ajustado fin de semana) — NO depende de weekStart
-const activeDayKey = useMemo(() => getActiveDayISO(), []);
+// ✅ Día activo SELECCIONABLE (necesita ser state para que las flechas funcionen día a día)
+const clampToWeek = useCallback(
+  (iso: string) => {
+    if (iso < dayKeys[0]) return dayKeys[0];
+    if (iso > dayKeys[4]) return dayKeys[4];
+    return iso;
+  },
+  [dayKeys]
+);
+
+const [activeDayKey, setActiveDayKey] = useState<string>(() => {
+  // inicial: hoy ajustado, pero si cae fuera del rango L-V de la semana visible → lunes
+  const today = getActiveDayISO();
+  return today >= dayKeys[0] && today <= dayKeys[4] ? today : dayKeys[0];
+});
+function addDaysISO(iso: string, delta: number) {
+  return toISODate(addDays(new Date(`${iso}T12:00:00`), delta));
+}
+// cada vez que cambia la semana visible (weekStart → dayKeys), ajusta activeDayKey
+useEffect(() => {
+  const today = getActiveDayISO();
+  const next = today >= dayKeys[0] && today <= dayKeys[4] ? today : dayKeys[0];
+  setActiveDayKey(next);
+}, [dayKeys]);
 
 // (ya no dependemos de dayNames para el header, pero puedes dejarlo si lo usas en otra cosa)
 const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
@@ -737,7 +759,7 @@ function weekdayES(iso: string) {
 type ExportMode = 'all' | 'today' | 'week' | 'range';
 const [exportMode, setExportMode] = useState<ExportMode>('week');
 const [rangeFrom, setRangeFrom] = useState<string>(''); // YYYY-MM-DD
-const [rangeTo, setRangeTo] = useState<string>('');     // YYYY-MM-DD
+const [rangeTo, setRangeTo] = useState<string>(''); // YYYY-MM-DD
 
 useEffect(() => {
   // Por defecto: semana visible
@@ -776,10 +798,17 @@ const visibleDayKeys = useMemo(() => {
   return dayKeys;
 }, [isMobilePortrait, activeDayKey, dayKeys]);
 
-// ✅ Esto sustituye a visibleDayNames: siempre correcto (aunque activeDayKey no esté en dayKeys)
+// ✅ Labels siempre correctos
 const visibleDayLabels = useMemo(() => {
   return visibleDayKeys.map((dk) => weekdayES(dk));
 }, [visibleDayKeys]);
+
+// ✅ (opcional pero recomendado) en móvil vertical, el “rango” sigue al día activo
+useEffect(() => {
+  if (!isMobilePortrait) return;
+  setRangeFrom(activeDayKey);
+  setRangeTo(activeDayKey);
+}, [isMobilePortrait, activeDayKey]);
 
 const unsubRef = useRef<null | (() => void)>(null);
 const rejoinBusyRef = useRef(false);
@@ -936,10 +965,34 @@ useEffect(() => {
     return map;
   }, [filteredItems]);
 
-  const prevWeek = () => setWeekStart((d) => addDays(d, -7));
-  const nextWeek = () => setWeekStart((d) => addDays(d, +7));
-  const goToday = () => setWeekStart(startOfWeekMonday(new Date()));
+const prevWeek = () => {
+  if (isMobilePortrait) {
+    // ← día anterior (L–V)
+    setActiveDayKey((cur) => clampToWeek(addDaysISO(cur, -1)));
+  } else {
+    // ← semana anterior
+    setWeekStart((w) => addDays(w, -7));
+  }
+};  
+const nextWeek = () => {
+  if (isMobilePortrait) {
+    // → día siguiente (L–V)
+    setActiveDayKey((cur) => clampToWeek(addDaysISO(cur, +1)));
+  } else {
+    // → semana siguiente
+    setWeekStart((w) => addDays(w, +7));
+  }
+};
+const goToday = () => {
+  const today = getActiveDayISO();
 
+  if (isMobilePortrait) {
+    // solo hoy (un día)
+    setActiveDayKey(clampToWeek(today));
+  } else {
+    // semana de hoy
+  setWeekStart(startOfWeekMonday(new Date(`${today}T12:00:00`)));  }
+};
   const onCancelAdd = () => setDraftCell(null);
 
   const onSubmitAdd = async (
