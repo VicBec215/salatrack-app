@@ -724,7 +724,7 @@ const dayKeys = useMemo(() => {
 }, [weekStart]);
 
 // ✅ HOY real (con ajuste fin de semana). Úsalo SOLO para resaltar
-const todayKey = useMemo(() => getActiveDayISO(), []);
+const todayKey = getActiveDayISO();
 
 // ✅ Día activo SELECCIONABLE (necesita ser state para que las flechas funcionen día a día)
 const clampToWeek = useCallback(
@@ -1376,20 +1376,18 @@ function prevBusinessDayISO(iso: string) {
   return toISODate(dt);
 }
 
-function getActiveDayISO(): string {
-  const today = new Date();
-  const day = today.getDay(); // 0=Dom, 6=Sáb
+function getActiveDayISO() {
+  // usamos el mediodía local para evitar líos de timezone/DST
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
 
-  // Si es sábado (6) → lunes siguiente (+2)
-  // Si es domingo (0) → lunes siguiente (+1)
-  if (day === 6) {
-    today.setDate(today.getDate() + 2);
-  } else if (day === 0) {
-    today.setDate(today.getDate() + 1);
-  }
+  const wd = d.getDay(); // 0=domingo ... 6=sábado
+  if (wd === 6) d.setDate(d.getDate() + 2); // sábado -> lunes
+  if (wd === 0) d.setDate(d.getDate() + 1); // domingo -> lunes
 
-  return today.toISOString().slice(0, 10); // YYYY-MM-DD
+  return toISODate(d); // ✅ local, consistente con dayKeys
 }
+
 function formatDateES(iso: string) {
   const [y, m, d] = iso.split('-');
   return `${d}-${m}-${y}`;
@@ -1529,16 +1527,16 @@ function formatDateES(iso: string) {
 </div>
 
   {visibleDayKeys.map((dk) => {
-  const isHighlighted = dk === todayKey;
+  const isToday = dk === todayKey;
 
   return (
     <div
       key={dk}
       className={[
         'text-xs font-semibold text-center rounded-lg py-1 border transition-colors',
-        isHighlighted
-          ? 'bg-rose-50 text-rose-700 border-rose-200'
-          : 'text-gray-500 border-transparent',
+        isToday
+          ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-200 dark:border-rose-300/40'
+          : 'text-gray-500 border-transparent dark:text-gray-300',
       ].join(' ')}
     >
       <div>{weekdayES(dk)}</div>
@@ -1625,32 +1623,23 @@ function RowBlock({
       <div className="border border-gray-200 dark:border-white/30 rounded-lg p-2 text-sm font-semibold bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-100">{row}</div>
 
       {dayKeys.map((dk: string) => {
-        const cellKey = `${dk}__${row}`;
-        const cell = byCell.get(cellKey) ?? [];
-        const isDraftHere = draftCell?.day === dk && draftCell?.row === row;
-        const isActiveDay = dk === activeDayKey;
-        const isToday = dk === todayKey;
-        
-        const isHighlighted = dk === todayKey;
+  const cellKey = `${dk}__${row}`;
+  const cell = byCell.get(cellKey) ?? [];
+  const isDraftHere = draftCell?.day === dk && draftCell?.row === row;
 
-<div
-  key={cellKey}
-  className={[
-    'border rounded-lg p-2 min-h-[120px] flex flex-col gap-2',
-    isHighlighted
-      ? 'bg-rose-50/40 border-rose-200 dark:bg-rose-500/10 dark:border-rose-300/40'
-      : 'bg-white dark:bg-gray-900/20 border-gray-200 dark:border-white/30',
-  ].join(' ')}
-></div>
+  const isHighlighted = dk === todayKey; // ✅ SOLO HOY (o lunes si finde)
 
-        return (
-          <div
-            key={cellKey}
-          className={[
-  'border rounded-lg p-2 min-h-[120px] flex flex-col gap-2',
-  isToday ? 'bg-rose-50/40 border-rose-200' : 'bg-white',
-].join(' ')}
-          >
+  return (
+    <div
+      key={cellKey}
+      className={[
+        'border rounded-lg p-2 min-h-[120px] flex flex-col gap-2',
+        isHighlighted
+          ? 'bg-rose-50/40 border-rose-200 dark:bg-rose-500/10 dark:border-rose-300/40'
+          : 'bg-white dark:bg-gray-900/20 border-gray-200 dark:border-white/30',
+      ].join(' ')}
+    >
+          
             {/* Botón "Añadir paciente" solo si no hay editor abierto */}
             {role === 'editor' && !isDraftHere && (
               <button
