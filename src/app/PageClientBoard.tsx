@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { startOfWeekMonday, addDays, toISODate } from '@/lib/date';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSwipeable } from 'react-swipeable';
 
 // Tipos flexibles SOLO para el entorno /test
 type RowKey = string;
@@ -1049,6 +1050,31 @@ const onNext = () => {
   (i) => i.day === day && i.row === draftCell!.row
 );
 
+  // ✅ Swipe: en móvil vertical día a día; en horizontal/desktop semana a semana
+  const goPrev = useCallback(() => {
+    if (isMobilePortrait) {
+      setActiveDayKey((d) => clampToWeek(addDaysISO(d, -1)));
+    } else {
+      prevWeek();
+    }
+  }, [isMobilePortrait, clampToWeek]);
+
+  const goNext = useCallback(() => {
+    if (isMobilePortrait) {
+      setActiveDayKey((d) => clampToWeek(addDaysISO(d, +1)));
+    } else {
+      nextWeek();
+    }
+  }, [isMobilePortrait, clampToWeek]);
+
+    const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => goNext(),
+    onSwipedRight: () => goPrev(),
+    preventScrollOnSwipe: true,
+    trackTouch: true,
+    delta: 60,
+  });
+
 const nextOrd =
   cellItems.length > 0
     ? Math.max(...cellItems.map((i) => Number(i.ord) || 0)) + 1
@@ -1393,8 +1419,16 @@ function formatDateES(iso: string) {
   return `${d}-${m}-${y}`;
 }
 
+const swipeHandlers = useSwipeable({
+  onSwipedLeft: () => onNext(),
+  onSwipedRight: () => onPrev(),
+  preventScrollOnSwipe: true,
+  trackTouch: true,
+  delta: 40,
+});
+
   return (
-  <div className="flex flex-col gap-3">
+  <div {...swipeHandlers} className="flex flex-col gap-3">
     <div className="mt-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
       {/* IZQUIERDA: navegación semana + solo visualización para editor*/}
       <div className="flex items-center gap-2">
