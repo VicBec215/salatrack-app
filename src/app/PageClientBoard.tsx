@@ -713,6 +713,11 @@ const visibleRows = useMemo(() => {
   return rows.filter((r) => r === roomFilter);
 }, [rows, roomFilter]);
 
+const [uiZoom, setUiZoom] = useState(1);
+
+const zoomIn = () => setUiZoom((z) => Math.min(1.35, +(z + 0.1).toFixed(2)));
+const zoomOut = () => setUiZoom((z) => Math.max(0.75, +(z - 0.1).toFixed(2)));
+const zoomReset = () => setUiZoom(1);
 
 // rol efectivo: si editor + readOnly => se comporta como viewer
 const effectiveRole = (role === "editor" && readOnly) ? "viewer" : role;
@@ -1427,19 +1432,27 @@ const swipeHandlers = useSwipeable({
   delta: 40,
 });
 
-  return (
+ return (
   <div {...swipeHandlers} className="flex flex-col gap-3">
     <div className="mt-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
       {/* IZQUIERDA: navegación semana + solo visualización para editor*/}
       <div className="flex items-center gap-2">
-        <button className="p-2 rounded-lg border hover:bg-gray-50" title="Anterior" onClick={onPrev}>
-        <ArrowLeft className="w-4 h-4" />
-        </button>
-        <button className="p-2 rounded-lg border hover:bg-gray-50" title="Siguiente" onClick={onNext}>
-        <ArrowRight className="w-4 h-4" />
+        <button
+          className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800/60"
+          title="Anterior"
+          onClick={onPrev}
+        >
+          <ArrowLeft className="w-4 h-4" />
         </button>
         <button
-          className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2"
+          className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800/60"
+          title="Siguiente"
+          onClick={onNext}
+        >
+          <ArrowRight className="w-4 h-4" />
+        </button>
+        <button
+          className="px-3 py-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800/60 text-sm flex items-center gap-2"
           onClick={goToday}
         >
           <Calendar className="w-4 h-4" />
@@ -1447,46 +1460,46 @@ const swipeHandlers = useSwipeable({
         </button>
       </div>
 
-       {role === 'editor' && (
-  <button
-  type="button"
-  onClick={() => setReadOnly((v) => !v)}
-  className="
-    inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
-    bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+      {role === 'editor' && (
+        <button
+          type="button"
+          onClick={() => setReadOnly((v) => !v)}
+          className="
+            inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
+            bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+            dark:bg-gray-900 dark:text-white dark:border-white/30 dark:hover:bg-gray-800
+          "
+          title={readOnly ? 'Quitar modo solo lectura' : 'Activar modo solo lectura'}
+        >
+          {/* ✅ en dark debía ser blanco */}
+          <span className="text-xs text-gray-700 dark:text-white">Solo lectura</span>
 
-    dark:bg-gray-900
-    dark:text-white
-    dark:border-white/30
-    dark:hover:bg-gray-800
-  "
-  title={readOnly ? 'Quitar modo solo lectura' : 'Activar modo solo lectura'}
->
-    <span className="text-xs text-gray-600">Solo lectura</span>
-
-    {/* Switch */}
-    <span
-      className={[
-        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-        readOnly ? 'bg-emerald-600' : 'bg-gray-300',
-      ].join(' ')}
-    >
-      <span
-        className={[
-          'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-          readOnly ? 'translate-x-5' : 'translate-x-1',
-        ].join(' ')}
-      />
-    </span>
-  </button>
-)}
+          {/* Switch */}
+          <span
+            className={[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              readOnly ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-600',
+            ].join(' ')}
+          >
+            <span
+              className={[
+                'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+                readOnly ? 'translate-x-5' : 'translate-x-1',
+              ].join(' ')}
+            />
+          </span>
+        </button>
+      )}
 
       {/* DERECHA: buscador + export  */}
       <div className="flex items-center gap-2 w-full md:w-auto md:ml-auto">
-        
         {/* Buscador (siempre visible) */}
         <input
-          className="border rounded-lg px-3 py-2 text-sm w-full md:w-[260px]"
+          className="
+            border rounded-lg px-3 py-2 text-sm w-full md:w-[260px]
+            bg-white text-gray-700 border-gray-300
+            dark:bg-gray-900 dark:text-gray-200 dark:border-white/30
+          "
           placeholder="Buscar…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -1496,14 +1509,11 @@ const swipeHandlers = useSwipeable({
         {effectiveRole === 'editor' && (
           <>
             <select
-              className="border rounded-lg px-3 py-2 text-sm
-    bg-white text-gray-700 border-gray-300
-    hover:bg-gray-50
-
-    dark:bg-gray-900
-    dark:text-gray-200
-    dark:border-white/30
-    dark:hover:bg-gray-800"
+              className="
+                border rounded-lg px-3 py-2 text-sm
+                bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+                dark:bg-gray-900 dark:text-gray-200 dark:border-white/30 dark:hover:bg-gray-800
+              "
               value={exportMode}
               onChange={(e) => setExportMode(e.target.value as ExportMode)}
               title="Rango exportación"
@@ -1518,13 +1528,21 @@ const swipeHandlers = useSwipeable({
               <>
                 <input
                   type="date"
-                  className="border rounded-lg px-2 py-2 text-sm"
+                  className="
+                    border rounded-lg px-2 py-2 text-sm
+                    bg-white text-gray-700 border-gray-300
+                    dark:bg-gray-900 dark:text-gray-200 dark:border-white/30
+                  "
                   value={rangeFrom}
                   onChange={(e) => setRangeFrom(e.target.value)}
                 />
                 <input
                   type="date"
-                  className="border rounded-lg px-2 py-2 text-sm"
+                  className="
+                    border rounded-lg px-2 py-2 text-sm
+                    bg-white text-gray-700 border-gray-300
+                    dark:bg-gray-900 dark:text-gray-200 dark:border-white/30
+                  "
                   value={rangeTo}
                   onChange={(e) => setRangeTo(e.target.value)}
                 />
@@ -1532,7 +1550,11 @@ const swipeHandlers = useSwipeable({
             )}
 
             <button
-              className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2"
+              className="
+                px-3 py-2 rounded-lg border text-sm flex items-center gap-2
+                hover:bg-gray-50
+                dark:hover:bg-gray-800/60
+              "
               onClick={() => void exportCSV()}
               title="Exportar CSV"
             >
@@ -1544,91 +1566,139 @@ const swipeHandlers = useSwipeable({
       </div>
     </div>
 
-    {/* ... aquí sigue tu grid etc ... */}
-
+    {/* ✅ ZOOM WRAPPER: aplica scale SOLO a la tabla/grid */}
+    <div className="overflow-x-auto">
       <div
-  className={[
-    "grid gap-2",
-    isMobilePortrait
-      ? "grid-cols-[80px_minmax(0,1fr)]"
-      : "grid-cols-[80px_repeat(5,minmax(0,1fr))]",
-  ].join(" ")}
->
-<div className="flex items-center">
-  <select
-    className="
-    border rounded px-2 py-1 text-xs
-    text-gray-700 dark:text-gray-200
-    bg-white dark:bg-gray-900
-    border-gray-300 dark:border-gray-600
-    "
-    value={roomFilter}
-    onChange={(e) => setRoomFilter(e.target.value as RowKey)}
-    title="Filtrar por sala"
-  >
-    <option value="__all__">Todas</option>
-    {rows.map((r) => (
-      <option key={r} value={r}>
-        {r}
-      </option>
-    ))}
-  </select>
-</div>
+        style={{ transform: `scale(${uiZoom})`, transformOrigin: 'top left' }}
+        className="w-fit"
+      >
+        <div
+          className={[
+            'grid gap-2',
+            isMobilePortrait
+              ? 'grid-cols-[80px_minmax(0,1fr)]'
+              : 'grid-cols-[80px_repeat(5,minmax(0,1fr))]',
+          ].join(' ')}
+        >
+          {/* selector sala */}
+          <div className="flex items-center">
+            <select
+              className="
+                border rounded px-2 py-1 text-xs
+                text-gray-700 dark:text-gray-200
+                bg-white dark:bg-gray-900
+                border-gray-300 dark:border-gray-600
+              "
+              value={roomFilter}
+              onChange={(e) => setRoomFilter(e.target.value as RowKey)}
+              title="Filtrar por sala"
+            >
+              <option value="__all__">Todas</option>
+              {rows.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
 
-  {visibleDayKeys.map((dk) => {
-  const isToday = dk === todayKey;
+          {/* encabezado días */}
+          {visibleDayKeys.map((dk) => {
+            const isToday = dk === todayKey;
 
-  return (
-    <div
-      key={dk}
-      className={[
-        'text-xs font-semibold text-center rounded-lg py-1 border transition-colors',
-        isToday
-          ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-200 dark:border-rose-300/40'
-          : 'text-gray-500 border-transparent dark:text-gray-300',
-      ].join(' ')}
-    >
-      <div>{weekdayES(dk)}</div>
-      <div className="text-[11px] font-normal text-gray-400 dark:text-gray-400">
-        {formatDateES(dk)}
+            return (
+              <div
+                key={dk}
+                className={[
+                  'text-xs font-semibold text-center rounded-lg py-1 border transition-colors',
+                  isToday
+                    ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-200 dark:border-rose-300/40'
+                    : 'text-gray-500 border-transparent dark:text-gray-300',
+                ].join(' ')}
+              >
+                <div>{weekdayES(dk)}</div>
+                <div className="text-[11px] font-normal text-gray-400 dark:text-gray-400">
+                  {formatDateES(dk)}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* filas */}
+          {visibleRows.map((row) => (
+            <RowBlock
+              key={row}
+              role={effectiveRole}
+              row={row}
+              dayKeys={visibleDayKeys}
+              byCell={byCell}
+              draftCell={draftCell}
+              setDraftCell={setDraftCell}
+              editId={editId}
+              setEditId={setEditId}
+              onSubmitAdd={onSubmitAdd}
+              onCancelAdd={onCancelAdd}
+              onSubmitEdit={onSubmitEdit}
+              doDelete={doDelete}
+              doToggleDone={doToggleDone}
+              moveOneUp={moveOneUp}
+              moveOneDown={moveOneDown}
+              moveRowUp={moveRowUp}
+              moveRowDown={moveRowDown}
+              moveDayLeft={moveDayLeft}
+              moveDayRight={moveDayRight}
+              procs={procs}
+              activeDayKey={activeDayKey}
+              todayKey={todayKey}
+            />
+          ))}
+        </div>
       </div>
     </div>
-  );
-})}
 
-  {/* aquí ya siguen tus RowBlock(...) */}
+    {/* ✅ BOTONES FLOTANTES ZOOM */}
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={zoomIn}
+        className="
+          h-10 w-10 rounded-full border shadow flex items-center justify-center
+          bg-white/90 hover:bg-white
+          dark:bg-gray-900/90 dark:hover:bg-gray-900 dark:border-white/20 dark:text-gray-100
+        "
+        title="Zoom +"
+      >
+        +
+      </button>
 
+      <button
+        type="button"
+        onClick={zoomOut}
+        className="
+          h-10 w-10 rounded-full border shadow flex items-center justify-center
+          bg-white/90 hover:bg-white
+          dark:bg-gray-900/90 dark:hover:bg-gray-900 dark:border-white/20 dark:text-gray-100
+        "
+        title="Zoom −"
+      >
+        −
+      </button>
 
-        {visibleRows.map((row) => (
-          <RowBlock
-            key={row}
-            role={effectiveRole}
-            row={row}
-            dayKeys={visibleDayKeys}
-            byCell={byCell}
-            draftCell={draftCell}
-            setDraftCell={setDraftCell}
-            editId={editId}
-            setEditId={setEditId}
-            onSubmitAdd={onSubmitAdd}
-            onCancelAdd={onCancelAdd}
-            onSubmitEdit={onSubmitEdit}
-            doDelete={doDelete}
-            doToggleDone={doToggleDone}
-            moveOneUp={moveOneUp}
-            moveOneDown={moveOneDown}
-            moveRowUp={moveRowUp}
-            moveRowDown={moveRowDown}
-            moveDayLeft={moveDayLeft}
-            moveDayRight={moveDayRight}
-            procs={procs}
-            activeDayKey={activeDayKey}
-            todayKey={todayKey}
-          />
-        ))}
-      </div>
+      <button
+        type="button"
+        onClick={zoomReset}
+        className="
+          h-10 w-10 rounded-full border shadow flex items-center justify-center text-xs
+          bg-white/90 hover:bg-white
+          dark:bg-gray-900/90 dark:hover:bg-gray-900 dark:border-white/20 dark:text-gray-100
+        "
+        title="Reset"
+      >
+        1x
+      </button>
     </div>
-  );
+  </div>
+);
 }
 function RowBlock({
   role,
