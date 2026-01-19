@@ -1677,12 +1677,22 @@ function RowBlock({
             {/* Botón "Añadir paciente" solo si no hay editor abierto */}
             {role === 'editor' && !isDraftHere && (
               <button
-                className="w-full flex items-center justify-center gap-2 border rounded-lg py-2 text-sm hover:bg-gray-50 bg-white"
-                onClick={() => setDraftCell({ day: dk, row })}
-              >
-                <Plus className="w-4 h-4" />
-                Añadir paciente
-              </button>
+              className="
+                w-full flex items-center justify-center gap-2
+                border rounded-lg py-2 text-sm
+                bg-white text-gray-700 border-gray-200
+                hover:bg-gray-50
+
+                dark:bg-gray-900/40
+                dark:text-gray-200
+                dark:border-white/30
+                dark:hover:bg-gray-800/60
+              "
+              onClick={() => setDraftCell({ day: dk, row })}
+            >
+              <Plus className="w-4 h-4" />
+              Añadir paciente
+            </button>
             )}
 
             {isDraftHere && (
