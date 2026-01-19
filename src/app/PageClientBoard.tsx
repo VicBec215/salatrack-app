@@ -1449,11 +1449,19 @@ const swipeHandlers = useSwipeable({
 
        {role === 'editor' && (
   <button
-    type="button"
-    onClick={() => setReadOnly((v) => !v)}
-    className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border bg-white hover:bg-gray-50"
-    title={readOnly ? 'Quitar modo solo lectura' : 'Activar modo solo lectura'}
-  >
+  type="button"
+  onClick={() => setReadOnly((v) => !v)}
+  className="
+    inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
+    bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+
+    dark:bg-gray-900
+    dark:text-gray-200
+    dark:border-white/30
+    dark:hover:bg-gray-800
+  "
+  title={readOnly ? 'Quitar modo solo lectura' : 'Activar modo solo lectura'}
+>
     <span className="text-xs text-gray-600">Solo lectura</span>
 
     {/* Switch */}
@@ -1488,7 +1496,14 @@ const swipeHandlers = useSwipeable({
         {effectiveRole === 'editor' && (
           <>
             <select
-              className="border rounded-lg px-2 py-2 text-sm bg-white"
+              className="border rounded-lg px-3 py-2 text-sm
+    bg-white text-gray-700 border-gray-300
+    hover:bg-gray-50
+
+    dark:bg-gray-900
+    dark:text-gray-200
+    dark:border-white/30
+    dark:hover:bg-gray-800"
               value={exportMode}
               onChange={(e) => setExportMode(e.target.value as ExportMode)}
               title="Rango exportación"
