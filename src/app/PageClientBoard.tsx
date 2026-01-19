@@ -387,7 +387,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   // Render
   // ─────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 max-w-[1200px] mx-auto">
+    <div className="p-4 max-w-[1600px] mx-auto">
       <Header role={role} centerName={centerName} openRoomsToday={openRoomsToday} />
       {!authReady ? (
         <div className="text-sm text-gray-600">Cargando…</div>
@@ -1456,7 +1456,7 @@ const swipeHandlers = useSwipeable({
     bg-white text-gray-700 border-gray-300 hover:bg-gray-50
 
     dark:bg-gray-900
-    dark:text-gray-200
+    dark:text-white
     dark:border-white/30
     dark:hover:bg-gray-800
   "
