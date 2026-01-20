@@ -303,17 +303,17 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
   // ─────────────────────────────────────────────────────────────
   // 1b) Cargar configuración del centro SIEMPRE (aunque no haya login)
-  //     (simplificado: un solo disparo, sin focus/online retries)
+  //     (un solo disparo; sin watchdog ni hard-retries)
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
 
-    (async () => {
+    void (async () => {
       try {
         await loadCenterConfig();
       } catch (e) {
-        if (!alive) return;
-        // Si es un abort/transient no machacamos al usuario
+        if (cancelled) return;
+        // Abort/transient: no bloqueamos la UI ni alertamos
         if (isTransientNetworkError(e)) {
           console.warn('[CENTER] transient error loading config (ignored)', e);
           return;
@@ -322,28 +322,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       }
     })();
 
-    // Watchdog: si por algún motivo (AbortError / StrictMode) no queda centerId,
-    // reintenta UNA vez a los ~2.5s. Evita bucles con sessionStorage.
-    const t = window.setTimeout(() => {
-      if (!alive) return;
-      if (centerId) return;
-      const key = `salatrack_center_retry_${slug}`;
-      if (typeof window !== 'undefined' && sessionStorage.getItem(key) === '1') return;
-      try {
-        sessionStorage.setItem(key, '1');
-      } catch {}
-      void loadCenterConfig().catch((e) => {
-        if (isTransientNetworkError(e)) {
-          console.warn('[CENTER] watchdog retry still transient', e);
-          return;
-        }
-        showErr(e);
-      });
-    }, 2500);
-
     return () => {
-      window.clearTimeout(t);
-      alive = false;
+      cancelled = true;
     };
   }, [loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
@@ -508,12 +488,6 @@ function AuthButtons() {
       try {
         const { data } = await supabase.auth.getSession();
         setUserEmail(data.session?.user?.email ?? null);
-        if (typeof window !== 'undefined' && data.session?.user) {
-          try { sessionStorage.removeItem('salatrack_signedout_hardrefresh'); } catch {}
-        }
-        if (typeof window !== 'undefined' && !data.session?.user) {
-          try { sessionStorage.removeItem('salatrack_signedin_hardrefresh'); } catch {}
-        }
       } catch (e) {
         if (isTransientNetworkError(e)) return;
         console.warn('[AUTH] getSession failed', e);
@@ -551,22 +525,10 @@ function AuthButtons() {
       setEmail('');
       setPass('');
       setOpen(false);
+
+      // Aviso opcional para otros componentes
       if (typeof window !== 'undefined') {
-        window.setTimeout(async () => {
-          try {
-            const { data } = await supabase.auth.getSession();
-            const ok = !!data.session?.user;
-            if (!ok) return;
-            // si por cualquier motivo la UI no ha repintado, forzamos un refresh UNA vez
-            const key = 'salatrack_signedin_hardrefresh';
-            if (sessionStorage.getItem(key) !== '1') {
-              sessionStorage.setItem(key, '1');
-              window.location.reload();
-            }
-          } catch {
-            // ignore
-          }
-        }, 1500);
+        window.dispatchEvent(new Event('salatrack:signedin'));
       }
     } catch (e) {
       showErr(e);
@@ -582,15 +544,11 @@ function AuthButtons() {
       // ✅ actualiza UI inmediatamente
       setUserEmail(null);
       setOpen(false);
+      setEmail('');
+      setPass('');
 
-      // ✅ Hard refresh: evita estados colgados / caches raras del auth en el cliente
       if (typeof window !== 'undefined') {
-        // evita bucle infinito
-        const key = 'salatrack_signedout_hardrefresh';
-        if (sessionStorage.getItem(key) !== '1') {
-          sessionStorage.setItem(key, '1');
-          window.location.reload();
-        }
+        window.dispatchEvent(new Event('salatrack:signedout'));
       }
     } catch (e) {
       showErr(e);
