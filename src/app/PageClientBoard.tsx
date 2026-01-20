@@ -209,7 +209,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   const [role, setRole] = useState<'editor' | 'viewer' | 'unknown'>('unknown');
 
   const [centerId, setCenterId] = useState<string | null>(null);
-  const [centerName, setCenterName] = useState<string>(slug || 'Centro');
+  const [centerName, setCenterName] = useState<string>(slug || '');
   const [rows, setRows] = useState<RowKey[]>([]);
   const [procs, setProcs] = useState<ProcDef[]>([]);
   const [openRoomsToday, setOpenRoomsToday] = useState<number | null>(null);
@@ -220,72 +220,85 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   // 1) Cargar configuración del centro
   // ─────────────────────────────────────────────────────────────
   const loadCenterConfig = useCallback(async () => {
-    const { data: center, error: cErr } = await supabase
-      .from('centers')
-      .select('id, slug, name')
-      .eq('slug', slug)
-      .single();
+    // Single-flight: evita llamadas solapadas (p.ej. StrictMode / doble render)
+    if (loadingCenterRef.current) return loadingCenterRef.current;
 
-    if (cErr) throw cErr;
-    if (!center?.id) throw new Error(`Centro no encontrado: ${slug}`);
+    const p = (async () => {
+      const { data: center, error: cErr } = await supabase
+        .from('centers')
+        .select('id, slug, name')
+        .eq('slug', slug)
+        .single();
 
-    setCenterId(center.id);
-    setCenterName(center.name || slug);
+      if (cErr) throw cErr;
+      if (!center?.id) throw new Error(`Centro no encontrado: ${slug}`);
 
-    // Rooms (filas)
-    const { data: roomsData, error: rErr } = await supabase
-      .from('rooms')
-      .select('name, active')
-      .eq('center_id', center.id)
-      .eq('active', true)
-      .order('name', { ascending: true });
+      setCenterId(center.id);
+      setCenterName(center.name || slug);
 
-    if (rErr) throw rErr;
+      // Rooms (filas)
+      const { data: roomsData, error: rErr } = await supabase
+        .from('rooms')
+        .select('name, active')
+        .eq('center_id', center.id)
+        .eq('active', true)
+        .order('name', { ascending: true });
 
-    const roomNames: string[] = (roomsData ?? [])
-      .map((x: any) => String(x.name))
-      .filter(Boolean);
+      if (rErr) throw rErr;
 
-    setRows(roomNames.length ? roomNames : ['Sala 1']);
+      const roomNames: string[] = (roomsData ?? [])
+        .map((x: any) => String(x.name))
+        .filter(Boolean);
 
-    // Procedures
-    const { data: procData, error: pErr } = await supabase
-      .from('procedure_types')
-      .select('name, color_bg, color_text, sort_order, active')
-      .eq('center_id', center.id)
-      .eq('active', true)
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true });
+      setRows(roomNames.length ? roomNames : ['Sala 1']);
 
-    if (pErr) throw pErr;
+      // Procedures
+      const { data: procData, error: pErr } = await supabase
+        .from('procedure_types')
+        .select('name, color_bg, color_text, sort_order, active')
+        .eq('center_id', center.id)
+        .eq('active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
 
-    const procList: ProcDef[] = (procData ?? [])
-      .map((x: any) => ({
-        name: String(x.name),
-        color_bg: x.color_bg ?? null,
-        color_text: x.color_text ?? null,
-      }))
-      .filter((p) => p.name);
+      if (pErr) throw pErr;
 
-    setProcs(
-      procList.length
-        ? procList
-        : [{ name: 'Coronario', color_bg: '#DCFCE7', color_text: '#166534' }],
-    );
+      const procList: ProcDef[] = (procData ?? [])
+        .map((x: any) => ({
+          name: String(x.name),
+          color_bg: x.color_bg ?? null,
+          color_text: x.color_text ?? null,
+        }))
+        .filter((p) => p.name);
 
-    // Salas abiertas hoy (room_schedule)
-    const todayISO = toISODate(new Date());
-    const { data: sched, error: sErr } = await supabase
-      .from('room_schedule')
-      .select('open_rooms')
-      .eq('center_id', center.id)
-      .eq('day', todayISO)
-      .maybeSingle();
+      setProcs(
+        procList.length
+          ? procList
+          : [{ name: 'Coronario', color_bg: '#DCFCE7', color_text: '#166534' }],
+      );
 
-    if (sErr) throw sErr;
+      // Salas abiertas hoy (room_schedule)
+      const todayISO = toISODate(new Date());
+      const { data: sched, error: sErr } = await supabase
+        .from('room_schedule')
+        .select('open_rooms')
+        .eq('center_id', center.id)
+        .eq('day', todayISO)
+        .maybeSingle();
 
-    const open = sched?.open_rooms ?? roomNames.length ?? null;
-    setOpenRoomsToday(typeof open === 'number' ? open : null);
+      if (sErr) throw sErr;
+
+      const open = sched?.open_rooms ?? roomNames.length ?? null;
+      setOpenRoomsToday(typeof open === 'number' ? open : null);
+    })();
+
+    loadingCenterRef.current = p;
+    try {
+      await p;
+    } finally {
+      // libera el lock aunque haya error
+      loadingCenterRef.current = null;
+    }
   }, [slug]);
 
   // ─────────────────────────────────────────────────────────────
@@ -309,7 +322,27 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       }
     })();
 
+    // Watchdog: si por algún motivo (AbortError / StrictMode) no queda centerId,
+    // reintenta UNA vez a los ~2.5s. Evita bucles con sessionStorage.
+    const t = window.setTimeout(() => {
+      if (!alive) return;
+      if (centerId) return;
+      const key = `salatrack_center_retry_${slug}`;
+      if (typeof window !== 'undefined' && sessionStorage.getItem(key) === '1') return;
+      try {
+        sessionStorage.setItem(key, '1');
+      } catch {}
+      void loadCenterConfig().catch((e) => {
+        if (isTransientNetworkError(e)) {
+          console.warn('[CENTER] watchdog retry still transient', e);
+          return;
+        }
+        showErr(e);
+      });
+    }, 2500);
+
     return () => {
+      window.clearTimeout(t);
       alive = false;
     };
   }, [loadCenterConfig]);
@@ -428,7 +461,7 @@ function Header({
 
         <div className="flex flex-col min-w-0">
           <div className="text-xl font-semibold leading-tight text-gray-900 dark:text-gray-100 truncate">
-            {centerName || 'Cargando centro...'}
+            {centerName || '…'}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-300">
             {openRoomsToday == null ? 'Salas disponibles: —' : `Salas disponibles: ${openRoomsToday}`}
@@ -475,6 +508,12 @@ function AuthButtons() {
       try {
         const { data } = await supabase.auth.getSession();
         setUserEmail(data.session?.user?.email ?? null);
+        if (typeof window !== 'undefined' && data.session?.user) {
+          try { sessionStorage.removeItem('salatrack_signedout_hardrefresh'); } catch {}
+        }
+        if (typeof window !== 'undefined' && !data.session?.user) {
+          try { sessionStorage.removeItem('salatrack_signedin_hardrefresh'); } catch {}
+        }
       } catch (e) {
         if (isTransientNetworkError(e)) return;
         console.warn('[AUTH] getSession failed', e);
@@ -512,6 +551,23 @@ function AuthButtons() {
       setEmail('');
       setPass('');
       setOpen(false);
+      if (typeof window !== 'undefined') {
+        window.setTimeout(async () => {
+          try {
+            const { data } = await supabase.auth.getSession();
+            const ok = !!data.session?.user;
+            if (!ok) return;
+            // si por cualquier motivo la UI no ha repintado, forzamos un refresh UNA vez
+            const key = 'salatrack_signedin_hardrefresh';
+            if (sessionStorage.getItem(key) !== '1') {
+              sessionStorage.setItem(key, '1');
+              window.location.reload();
+            }
+          } catch {
+            // ignore
+          }
+        }, 1500);
+      }
     } catch (e) {
       showErr(e);
     }
@@ -526,6 +582,16 @@ function AuthButtons() {
       // ✅ actualiza UI inmediatamente
       setUserEmail(null);
       setOpen(false);
+
+      // ✅ Hard refresh: evita estados colgados / caches raras del auth en el cliente
+      if (typeof window !== 'undefined') {
+        // evita bucle infinito
+        const key = 'salatrack_signedout_hardrefresh';
+        if (sessionStorage.getItem(key) !== '1') {
+          sessionStorage.setItem(key, '1');
+          window.location.reload();
+        }
+      }
     } catch (e) {
       showErr(e);
     }
