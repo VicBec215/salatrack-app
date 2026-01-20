@@ -289,12 +289,21 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   }, [slug]);
 
   // Wrapper robusto: reutiliza la misma promesa si ya hay una carga en curso
+  // ✅ Importante: NUNCA debe rechazar (para evitar "Uncaught (in promise) AbortError")
   const safeLoadCenterConfig = useCallback(async () => {
     if (loadingCenterRef.current) return loadingCenterRef.current;
 
     loadingCenterRef.current = (async () => {
       try {
         await retry(() => loadCenterConfig(), 4, 500);
+      } catch (e) {
+        // Abort/transient: no alert, no throw
+        if (isTransientNetworkError(e)) {
+          console.warn('[CENTER] transient error loading config (ignored)', e);
+          return;
+        }
+        // Error real: lo mostramos pero NO propagamos
+        showErr(e);
       } finally {
         loadingCenterRef.current = null;
       }
@@ -310,19 +319,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
     let cancelled = false;
 
     const run = async () => {
-      try {
-        await safeLoadCenterConfig();
-      } catch (e) {
-        if (cancelled) return;
-
-        // Si es un abort/transient, no spameamos ni alertamos: reintentamos al volver online/focus
-        if (isTransientNetworkError(e)) {
-          console.warn('[CENTER] transient error loading config — will retry on online/focus', e);
-          return;
-        }
-
-        showErr(e);
-      }
+      if (cancelled) return;
+      await safeLoadCenterConfig();
     };
 
     void run();
@@ -358,18 +356,6 @@ export default function PageClientBoard({ slug }: { slug: string }) {
         return await retry(() => getMyRole(slug), 3, 350);
       } catch (e) {
         console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
-
-        // Reintento suave (por si el fallo fue un AbortError puntual)
-        setTimeout(() => {
-          retry(() => getMyRole(slug), 3, 500)
-            .then((r) => {
-              if (!cancelled) setRole(r);
-            })
-            .catch(() => {
-              /* ignore */
-            });
-        }, 1500);
-
         return 'viewer' as const;
       }
     };
@@ -382,7 +368,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       console.log('[AUTH] onAuthStateChange user =', hasUser);
 
       setAuthReady(true);
-      setRole(await safeGetRole(hasUser));
+      const nextRole = await safeGetRole(hasUser);
+      if (!cancelled) setRole(nextRole);
       // Garantiza que la config del centro esté cargada (sin solapes)
       void safeLoadCenterConfig();
     });
@@ -397,7 +384,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
         console.log('[AUTH] mount session user =', hasUser);
 
         setAuthReady(true);
-        setRole(await safeGetRole(hasUser));
+        const nextRole = await safeGetRole(hasUser);
+        if (!cancelled) setRole(nextRole);
         // Garantiza que la config del centro esté cargada (sin solapes)
         void safeLoadCenterConfig();
       } catch (e) {
