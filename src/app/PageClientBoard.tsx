@@ -1430,126 +1430,119 @@ const [fitScreen, setFitScreen] = useState(false);
 
   return (
   <div {...swipeHandlers} className="flex flex-col gap-3">
-    <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-  {/* IZQUIERDA: navegación */}
-  <div className="flex items-center gap-2 shrink-0">
-    <button
-      className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
-      title="Anterior"
-      onClick={onPrev}
-    >
-      <ArrowLeft className="w-4 h-4" />
-    </button>
-
-    <button
-      className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
-      title="Siguiente"
-      onClick={onNext}
-    >
-      <ArrowRight className="w-4 h-4" />
-    </button>
-
-    <button
-      className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
-                 dark:hover:bg-gray-800 dark:border-white/30"
-      onClick={goToday}
-    >
-      <Calendar className="w-4 h-4" />
-      Hoy
-    </button>
-  </div>
-
-  {/* DERECHA: en móvil va en la MISMA FILA (wrap) */}
-  <div className="flex items-center gap-2 w-full md:w-auto md:ml-auto flex-wrap md:flex-nowrap">
-    {/* ✅ Solo lectura: visible también en móvil (si editor) */}
-    {role === 'editor' && (
+    <div className="mt-3 flex flex-col gap-2">
+  {/* FILA 1 */}
+  <div className="flex items-center justify-between gap-2">
+    {/* IZQUIERDA */}
+    <div className="flex items-center gap-2">
       <button
-        type="button"
-        onClick={() => setReadOnly((v) => !v)}
-        className="
-          inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
-          bg-white text-gray-700 border-gray-300 hover:bg-gray-50
-          dark:bg-gray-900 dark:text-white dark:border-white/30 dark:hover:bg-gray-800
-          shrink-0
-        "
-        title={readOnly ? 'Quitar modo solo lectura' : 'Activar modo solo lectura'}
+        className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
+        title="Anterior"
+        onClick={onPrev}
       >
-        <span className="text-xs text-gray-700 dark:text-white">Solo lectura</span>
+        <ArrowLeft className="w-4 h-4" />
+      </button>
 
-        <span
-          className={[
-            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-            readOnly ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-700',
-          ].join(' ')}
+      <button
+        className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
+        title="Siguiente"
+        onClick={onNext}
+      >
+        <ArrowRight className="w-4 h-4" />
+      </button>
+
+      <button
+        className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
+                   dark:hover:bg-gray-800 dark:border-white/30"
+        onClick={goToday}
+      >
+        <Calendar className="w-4 h-4" />
+        Hoy
+      </button>
+
+      {/* SOLO LECTURA */}
+      {role === "editor" && (
+        <button
+          type="button"
+          onClick={() => setReadOnly((v) => !v)}
+          className="
+            inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
+            bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+            dark:bg-gray-900 dark:text-white dark:border-white/30 dark:hover:bg-gray-800
+          "
         >
+          <span className="text-xs">Solo lectura</span>
+
           <span
             className={[
-              'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-              readOnly ? 'translate-x-5' : 'translate-x-1',
-            ].join(' ')}
-          />
-        </span>
-      </button>
-    )}
+              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+              readOnly ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-700",
+            ].join(" ")}
+          >
+            <span
+              className={[
+                "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+                readOnly ? "translate-x-5" : "translate-x-1",
+              ].join(" ")}
+            />
+          </span>
+        </button>
+      )}
+    </div>
 
-    {/* ✅ Buscar siempre visible, y en móvil cabe en la misma fila */}
+    {/* DERECHA (desktop) */}
+    <div className="hidden md:flex items-center gap-2">
+      {/* BUSCADOR desktop */}
+      <input
+        className="
+          border rounded-lg px-3 py-2 text-sm w-[260px]
+          dark:bg-gray-900 dark:text-gray-100 dark:border-white/30
+        "
+        placeholder="Buscar…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
+      {/* EXPORT desktop */}
+      {effectiveRole === "editor" && (
+        <>
+          <select
+            className="border rounded-lg px-3 py-2 text-sm
+              bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+              dark:bg-gray-900 dark:text-gray-200 dark:border-white/30 dark:hover:bg-gray-800"
+            value={exportMode}
+            onChange={(e) => setExportMode(e.target.value as ExportMode)}
+          >
+            <option value="all">Todo</option>
+            <option value="today">Hoy</option>
+            <option value="week">Esta semana</option>
+            <option value="range">Período</option>
+          </select>
+
+          <button
+            className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
+                       dark:hover:bg-gray-800 dark:border-white/30"
+            onClick={() => void exportCSV()}
+          >
+            <Download className="w-4 h-4" />
+            CSV
+          </button>
+        </>
+      )}
+    </div>
+  </div>
+
+  {/* FILA 2 (solo móvil): buscador */}
+  <div className="md:hidden">
     <input
       className="
-        border rounded-lg px-3 py-2 text-sm
-        w-full md:w-[260px]
-        min-w-[160px] flex-1
+        border rounded-lg px-3 py-2 text-sm w-full
         dark:bg-gray-900 dark:text-gray-100 dark:border-white/30
       "
       placeholder="Buscar…"
       value={search}
       onChange={(e) => setSearch(e.target.value)}
     />
-
-    {/* ✅ Export SOLO en desktop (md+) */}
-    {effectiveRole === 'editor' && (
-      <div className="hidden md:flex items-center gap-2">
-        <select
-          className="border rounded-lg px-3 py-2 text-sm
-            bg-white text-gray-700 border-gray-300 hover:bg-gray-50
-            dark:bg-gray-900 dark:text-gray-200 dark:border-white/30 dark:hover:bg-gray-800"
-          value={exportMode}
-          onChange={(e) => setExportMode(e.target.value as ExportMode)}
-          title="Rango exportación"
-        >
-          <option value="all">Todo</option>
-          <option value="today">Hoy</option>
-          <option value="week">Esta semana</option>
-          <option value="range">Período</option>
-        </select>
-
-        {exportMode === 'range' && (
-          <>
-            <input
-              type="date"
-              className="border rounded-lg px-2 py-2 text-sm dark:bg-gray-900 dark:text-gray-100 dark:border-white/30"
-              value={rangeFrom}
-              onChange={(e) => setRangeFrom(e.target.value)}
-            />
-            <input
-              type="date"
-              className="border rounded-lg px-2 py-2 text-sm dark:bg-gray-900 dark:text-gray-100 dark:border-white/30"
-              value={rangeTo}
-              onChange={(e) => setRangeTo(e.target.value)}
-            />
-          </>
-        )}
-
-        <button
-          className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
-                     dark:hover:bg-gray-800 dark:border-white/30"
-          onClick={() => void exportCSV()}
-          title="Exportar CSV"
-        >
-          <Download className="w-4 h-4" />
-          CSV
-        </button>
-      </div>
-    )}
   </div>
 </div>
 
