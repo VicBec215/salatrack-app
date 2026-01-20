@@ -200,38 +200,7 @@ function InlineEditorCard({
 
 /* ===== raíz cliente (/test) ===== */
 export default function PageClientBoard({ slug }: { slug: string }) {
-  // ─────────────────────────────────────────────────────────────
-  // 0) Auto-refresh auth (evita doble ejecución en dev / StrictMode)
-  // ─────────────────────────────────────────────────────────────
-  const didInitAuth = useRef(false);
-
-  useEffect(() => {
-    if (didInitAuth.current) return;
-    didInitAuth.current = true;
-
-    console.log('[AUTH] startAutoRefresh');
-    supabase.auth.startAutoRefresh();
-
-    return () => {
-      console.log('[AUTH] stopAutoRefresh');
-      supabase.auth.stopAutoRefresh();
-    };
-  }, []);
-
-  // (debug opcional)
-  useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        console.log('[AUTH] session?', !!data.session, 'expires_at', data.session?.expires_at);
-      } catch (e) {
-        // Evita spam por abort/microcortes
-        if (isTransientNetworkError(e)) return;
-        console.warn('[AUTH] getSession interval failed', e);
-      }
-    }, 30_000);
-    return () => clearInterval(t);
-  }, []);
+  
 
   // ─────────────────────────────────────────────────────────────
   // State
@@ -316,7 +285,37 @@ export default function PageClientBoard({ slug }: { slug: string }) {
     const open = sched?.open_rooms ?? roomNames.length ?? null;
     setOpenRoomsToday(typeof open === 'number' ? open : null);
   }, [slug]);
+// ─────────────────────────────────────────────────────────────
+  // 1b) Cargar configuración del centro SIEMPRE (aunque no haya login)
+  //     Si falla por Abort/Network, reintenta en segundo plano.
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer: any = null;
 
+    const run = async () => {
+      try {
+        await retry(() => loadCenterConfig(), 6, 500);
+      } catch (e) {
+        if (cancelled) return;
+
+        if (isTransientNetworkError(e)) {
+          console.warn('[CENTER] transient error loading config — will retry', e);
+          retryTimer = setTimeout(run, 2000);
+          return;
+        }
+
+        showErr(e);
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
   // 2) Auth bootstrap + listener (robusto)
   //    ✅ IMPORTANTE: aunque falle una llamada puntual (AbortError),
@@ -329,24 +328,22 @@ export default function PageClientBoard({ slug }: { slug: string }) {
     const safeGetRole = async (hasUser: boolean) => {
       if (!hasUser) return 'unknown' as const;
       try {
-        // getMyRole puede fallar si hay un microcorte; lo toleramos
         return await retry(() => getMyRole(slug), 3, 350);
       } catch (e) {
         console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
-        return 'viewer' as const;
-      }
-    };
 
-    const safeLoad = async () => {
-      try {
-        await retry(() => loadCenterConfig(), 4, 500);
-      } catch (e) {
-        // Si hay fallo de red/abort, no rompemos la UI.
-        if (isTransientNetworkError(e)) {
-          console.warn('[AUTH] loadCenterConfig transient error (giving up for now)', e);
-        } else {
-          console.warn('[AUTH] loadCenterConfig failed', e);
-        }
+        // Reintento suave (por si el fallo fue un AbortError puntual)
+        setTimeout(() => {
+          retry(() => getMyRole(slug), 3, 500)
+            .then((r) => {
+              if (!cancelled) setRole(r);
+            })
+            .catch(() => {
+              /* ignore */
+            });
+        }, 1500);
+
+        return 'viewer' as const;
       }
     };
 
@@ -359,9 +356,6 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
       setAuthReady(true);
       setRole(await safeGetRole(hasUser));
-
-      // recarga config (por si cambia el centro/permiso)
-      await safeLoad();
     });
 
     // 2) Bootstrap inicial (preferimos getSession: suele ser local y NO se aborta)
@@ -375,15 +369,10 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
         setAuthReady(true);
         setRole(await safeGetRole(hasUser));
-
-        await safeLoad();
       } catch (e) {
-        // ✅ Antes: aquí se hacía return y nos quedábamos SIN listener.
-        // Ahora: el listener ya está puesto; solo marcamos ready y seguimos.
         if (isTransientNetworkError(e)) {
           console.warn('[AUTH] transient network error in boot (ignored)', e);
           setAuthReady(true);
-          // mantenemos el rol actual (por defecto 'unknown')
           return;
         }
 
@@ -399,7 +388,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       cancelled = true;
       listener.subscription.unsubscribe();
     };
-  }, [loadCenterConfig, slug]);
+  }, [slug]);
 
   // ─────────────────────────────────────────────────────────────
   // Render
@@ -453,7 +442,7 @@ function Header({
         </Link>
 
         <div className="flex flex-col min-w-0">
-          <div className="text-xl font-semibold leading-tight text-blue-900 dark:text-blue-200 truncate">
+          <div className="text-xl font-semibold leading-tight text-gray-900 dark:text-gray-100 truncate">
             {centerName || 'Cargando centro...'}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-300">
