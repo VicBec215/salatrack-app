@@ -209,7 +209,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   const [role, setRole] = useState<'editor' | 'viewer' | 'unknown'>('unknown');
 
   const [centerId, setCenterId] = useState<string | null>(null);
-  const [centerName, setCenterName] = useState<string>('Centro');
+  const [centerName, setCenterName] = useState<string>(slug || 'Centro');
   const [rows, setRows] = useState<RowKey[]>([]);
   const [procs, setProcs] = useState<ProcDef[]>([]);
   const [openRoomsToday, setOpenRoomsToday] = useState<number | null>(null);
@@ -313,32 +313,18 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   }, [loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
   // 1b) Cargar configuración del centro SIEMPRE (aunque no haya login)
-  //     ✅ single-flight + reintento suave solo cuando tiene sentido
+  //     (simplificado: un solo disparo, sin focus/online retries)
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
-    const run = async () => {
+    (async () => {
       if (cancelled) return;
       await safeLoadCenterConfig();
-    };
-
-    void run();
-
-    const onOnline = () => void run();
-    const onFocus = () => void run();
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', onOnline);
-      window.addEventListener('focus', onFocus);
-    }
+    })();
 
     return () => {
       cancelled = true;
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('online', onOnline);
-        window.removeEventListener('focus', onFocus);
-      }
     };
   }, [safeLoadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
@@ -355,7 +341,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       try {
         return await retry(() => getMyRole(slug), 3, 350);
       } catch (e) {
-        console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
+        if (!isTransientNetworkError(e)) console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
         return 'viewer' as const;
       }
     };
@@ -370,8 +356,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       setAuthReady(true);
       const nextRole = await safeGetRole(hasUser);
       if (!cancelled) setRole(nextRole);
-      // Garantiza que la config del centro esté cargada (sin solapes)
-      void safeLoadCenterConfig();
+      // (REMOVED: config reload)
     });
 
     // 2) Bootstrap inicial (preferimos getSession: suele ser local y NO se aborta)
@@ -386,8 +371,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
         setAuthReady(true);
         const nextRole = await safeGetRole(hasUser);
         if (!cancelled) setRole(nextRole);
-        // Garantiza que la config del centro esté cargada (sin solapes)
-        void safeLoadCenterConfig();
+        // (REMOVED: config reload)
       } catch (e) {
         if (isTransientNetworkError(e)) {
           console.warn('[AUTH] transient network error in boot (ignored)', e);
@@ -1067,61 +1051,36 @@ const refresh = useCallback(async () => {
   }
 }, [dayKeys, centerId]);
 
-useEffect(() => {
-  if (!centerId) return;
+  useEffect(() => {
+    if (!centerId) return;
 
-  let alive = true;
+    let alive = true;
 
-  const refreshSafe = async () => {
-    if (!alive) return;
-    // si estamos offline, ni lo intentes
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const refreshSafe = async () => {
+      if (!alive) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
-    try {
-      await refresh();
-    } catch (e) {
-      if (isTransientNetworkError(e)) return;
-      console.warn('[REFRESH] failed', e);
-    }
-  };
+      try {
+        await refresh();
+      } catch (e) {
+        if (isTransientNetworkError(e)) return;
+        console.warn('[REFRESH] failed', e);
+      }
+    };
 
-  // 1) primera carga
-  void refreshSafe();
-
-  // 2) realtime
-  unsubRef.current?.();
-  unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
-
-  // 3) polling suave (menos agresivo)
-  const poll = setInterval(() => {
+    // 1) primera carga
     void refreshSafe();
-  }, 45_000);
 
-  // 4) eventos mínimos
-  const onSignedIn = () => {
-    console.log('[REFRESH] signedin event');
-    void refreshSafe();
-  };
-  const onFocus = () => void refreshSafe();
-  const onOnline = () => void refreshSafe();
-
-  window.addEventListener('focus', onFocus);
-  window.addEventListener('online', onOnline);
-  window.addEventListener('salatrack:signedin', onSignedIn);
-
-  return () => {
-    alive = false;
-
-    window.removeEventListener('focus', onFocus);
-    window.removeEventListener('online', onOnline);
-    window.removeEventListener('salatrack:signedin', onSignedIn);
-
-    clearInterval(poll);
-
+    // 2) realtime
     unsubRef.current?.();
-    unsubRef.current = null;
-  };
-}, [centerId, refresh]);
+    unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
+
+    return () => {
+      alive = false;
+      unsubRef.current?.();
+      unsubRef.current = null;
+    };
+  }, [centerId, refresh]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
