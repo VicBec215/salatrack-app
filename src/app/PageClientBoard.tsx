@@ -81,7 +81,12 @@ export function isTransientNetworkError(e: any) {
     msg.includes('err_network_changed') ||
     msg.includes('internet_disconnected') ||
     msg.includes('websocket') ||
-    msg.includes('timeout')
+    msg.includes('timeout') ||
+    // abort / cancelled requests (Safari/Chrome can surface as "signal is aborted")
+    msg.includes('abort') ||
+    msg.includes('aborted') ||
+    msg.includes('aborterror') ||
+    msg.includes('signal is aborted')
   );
 }
 
@@ -1077,15 +1082,7 @@ useEffect(() => {
         console.warn('[RECOVER] refreshSession failed (will still try data)', e);
       }
 
-      // reinicia realtime
-      try {
-        supabase.realtime.disconnect();
-      } catch {}
-      try {
-        supabase.realtime.connect();
-      } catch {}
-
-      // re-suscribe canal realtime
+      // re-suscribe canal realtime (sin forzar disconnect/connect)
       try {
         unsubRef.current?.();
         unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
@@ -1242,38 +1239,13 @@ const onNext = () => {
   try {
     if (!centerId) return;
     const cellItems = items.filter(
-  (i) => i.day === day && i.row === draftCell!.row
-);
+      (i) => i.day === day && i.row === draftCell!.row
+    );
 
-  // ✅ Swipe: en móvil vertical día a día; en horizontal/desktop semana a semana
-  const goPrev = useCallback(() => {
-    if (isMobilePortrait) {
-      setActiveDayKey((d) => clampToWeek(addDaysISO(d, -1)));
-    } else {
-      prevWeek();
-    }
-  }, [isMobilePortrait, clampToWeek]);
-
-  const goNext = useCallback(() => {
-    if (isMobilePortrait) {
-      setActiveDayKey((d) => clampToWeek(addDaysISO(d, +1)));
-    } else {
-      nextWeek();
-    }
-  }, [isMobilePortrait, clampToWeek]);
-
-    const swipeHandlers = useSwipeable({
-    onSwipedLeft: () => goNext(),
-    onSwipedRight: () => goPrev(),
-    preventScrollOnSwipe: true,
-    trackTouch: true,
-    delta: 60,
-  });
-
-const nextOrd =
-  cellItems.length > 0
-    ? Math.max(...cellItems.map((i) => Number(i.ord) || 0)) + 1
-    : 1;
+    const nextOrd =
+      cellItems.length > 0
+        ? Math.max(...cellItems.map((i) => Number(i.ord) || 0)) + 1
+        : 1;
     const payload = {
       center_id: centerId,
       day,
@@ -1619,7 +1591,8 @@ const swipeHandlers = useSwipeable({
   onSwipedRight: () => onPrev(),
   preventScrollOnSwipe: true,
   trackTouch: true,
-  delta: 40,
+  delta: 60,
+  touchEventOptions: { passive: false },
 });
 
 const [fitScreen, setFitScreen] = useState(false);
