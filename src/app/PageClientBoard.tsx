@@ -469,8 +469,14 @@ function AuthButtons() {
   const [pass, setPass] = useState('');
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  // ✅ NUEVO: modal login (solo móvil)
+  // ✅ modal login (solo móvil)
   const [open, setOpen] = useState(false);
+
+  // ✅ reset password
+  const [resetSent, setResetSent] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [newPass, setNewPass] = useState('');
+  const [newPass2, setNewPass2] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -483,6 +489,14 @@ function AuthButtons() {
     });
 
     return () => sub.data.subscription.unsubscribe();
+  }, []);
+
+  // ✅ Detecta si venimos del link de recuperación (Supabase añade type=recovery)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const type = url.searchParams.get('type');
+    setRecoveryMode(type === 'recovery');
   }, []);
 
   const signIn = async () => {
@@ -506,7 +520,6 @@ function AuthButtons() {
 
       // ✅ avisa al Board de que ya hay sesión
       if (typeof window !== 'undefined') {
-        // pequeño delay para que Supabase asiente la sesión
         setTimeout(() => {
           window.dispatchEvent(new Event('salatrack:signedin'));
         }, 0);
@@ -526,13 +539,69 @@ function AuthButtons() {
     }
   };
 
+  // ✅ envía email de reset
+  const sendResetEmail = async () => {
+    try {
+      if (!email) {
+        alert('Introduce tu email para enviarte el enlace de recuperación');
+        return;
+      }
+      setResetSent(false);
+
+      const redirectTo =
+      typeof window !== "undefined"
+       ? `${window.location.origin}/reset-password`
+       : undefined;
+
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+       if (error) throw error;
+
+      setResetSent(true);
+    } catch (e) {
+      showErr(e);
+    }
+  };
+
+  // ✅ guarda nueva contraseña (modo recovery)
+  const updatePassword = async () => {
+    try {
+      if (!newPass || newPass.length < 8) {
+        alert('La contraseña debe tener al menos 8 caracteres');
+        return;
+      }
+      if (newPass !== newPass2) {
+        alert('Las contraseñas no coinciden');
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({ password: newPass });
+      if (error) throw error;
+
+      setNewPass('');
+      setNewPass2('');
+      setRecoveryMode(false);
+
+      // Cierra modal (por si estás en móvil)
+      setOpen(false);
+
+      // Limpia URL (quita ?type=recovery...)
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', window.location.pathname);
+        window.dispatchEvent(new Event('salatrack:signedin'));
+      }
+
+      alert('Contraseña actualizada. Ya puedes iniciar sesión.');
+    } catch (e) {
+      showErr(e);
+    }
+  };
+
   // ─────────────────────────────────────────────
-  // Usuario autenticado
+  // Usuario autenticado (SIN opción extra)
   // ─────────────────────────────────────────────
   if (userEmail) {
     return (
       <div className="flex items-center gap-2">
-        {/* Email solo en sm+ para que en móvil no “ensucie” */}
         <span className="text-xs text-gray-500 dark:text-gray-300 hidden sm:inline">
           {userEmail}
         </span>
@@ -549,45 +618,116 @@ function AuthButtons() {
   }
 
   // ─────────────────────────────────────────────
+  // Helpers UI (mantenemos el estilo)
+  // ─────────────────────────────────────────────
+  const LinkReset = (
+    <button
+      type="button"
+      onClick={() => void sendResetEmail()}
+      className="text-[11px] text-gray-500 hover:underline dark:text-gray-300 text-left"
+      title="Enviar enlace de recuperación"
+    >
+      ¿Olvidaste la contraseña?
+    </button>
+  );
+
+  const ResetSentBadge = resetSent ? (
+    <div className="text-[11px] text-emerald-700 dark:text-emerald-300">
+      Enlace enviado ✅ Revisa tu correo
+    </div>
+  ) : null;
+
+  // ─────────────────────────────────────────────
   // NO autenticado
-  // Desktop: formulario inline
+  // Desktop: inline
   // Móvil: botón + modal
+  // + recovery mode (si type=recovery)
   // ─────────────────────────────────────────────
   return (
     <>
-      {/* DESKTOP (>= sm): formulario inline */}
-      <form
-        className="hidden sm:flex items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void signIn();
-        }}
-      >
-        <input
-          className="w-[180px] border rounded-lg px-2 py-1 text-sm
-                     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-          placeholder="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-        />
-        <input
-          className="w-[140px] border rounded-lg px-2 py-1 text-sm
-                     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-          placeholder="password"
-          type="password"
-          value={pass}
-          onChange={(e) => setPass(e.target.value)}
-          autoComplete="current-password"
-        />
-        <button
-          type="submit"
-          className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
-                     dark:border-gray-600 dark:text-gray-100"
-        >
-          Entrar
-        </button>
-      </form>
+      {/* DESKTOP (>= sm) */}
+      {!recoveryMode ? (
+        <div className="hidden sm:flex flex-col items-end gap-1">
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void signIn();
+            }}
+          >
+            <input
+              className="w-[180px] border rounded-lg px-2 py-1 text-sm
+                         dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+              placeholder="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+            <input
+              className="w-[140px] border rounded-lg px-2 py-1 text-sm
+                         dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+              placeholder="password"
+              type="password"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              autoComplete="current-password"
+            />
+            <button
+              type="submit"
+              className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                         dark:border-gray-600 dark:text-gray-100"
+            >
+              Entrar
+            </button>
+          </form>
+
+          {/* Link reset + confirmación */}
+          <div className="flex flex-col items-end gap-1">
+            {LinkReset}
+            {ResetSentBadge}
+          </div>
+        </div>
+      ) : (
+        // DESKTOP recovery: mini form de nueva contraseña (sin cambiar demasiado el look)
+        <div className="hidden sm:flex flex-col items-end gap-2">
+          <div className="text-xs text-gray-600 dark:text-gray-300">
+            Establecer nueva contraseña
+          </div>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void updatePassword();
+            }}
+          >
+            <input
+              className="w-[180px] border rounded-lg px-2 py-1 text-sm
+                         dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+              placeholder="Nueva contraseña"
+              type="password"
+              value={newPass}
+              onChange={(e) => setNewPass(e.target.value)}
+              autoComplete="new-password"
+            />
+            <input
+              className="w-[180px] border rounded-lg px-2 py-1 text-sm
+                         dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+              placeholder="Repetir contraseña"
+              type="password"
+              value={newPass2}
+              onChange={(e) => setNewPass2(e.target.value)}
+              autoComplete="new-password"
+            />
+            <button
+              type="submit"
+              className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                         dark:border-gray-600 dark:text-gray-100"
+            >
+              Guardar
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* MÓVIL (< sm): botón compacto */}
       <div className="sm:hidden">
@@ -608,7 +748,9 @@ function AuthButtons() {
             className="absolute inset-0 bg-black/50"
             onClick={() => setOpen(false)}
             aria-label="Cerrar"
+            type="button"
           />
+
           {/* panel */}
           <div
             className="absolute left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2
@@ -617,7 +759,7 @@ function AuthButtons() {
           >
             <div className="flex items-center justify-between mb-3">
               <div className="font-semibold text-sm dark:text-gray-100">
-                Iniciar sesión
+                {recoveryMode ? 'Nueva contraseña' : 'Iniciar sesión'}
               </div>
               <button
                 className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
@@ -629,39 +771,83 @@ function AuthButtons() {
               </button>
             </div>
 
-            <form
-              className="flex flex-col gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void signIn();
-              }}
-            >
-              <input
-                className="w-full border rounded-lg px-3 py-2 text-sm
-                           dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-                placeholder="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                autoFocus
-              />
-              <input
-                className="w-full border rounded-lg px-3 py-2 text-sm
-                           dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-                placeholder="password"
-                type="password"
-                value={pass}
-                onChange={(e) => setPass(e.target.value)}
-                autoComplete="current-password"
-              />
-              <button
-                type="submit"
-                className="mt-1 w-full px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
-                           dark:border-gray-600 dark:text-gray-100"
+            {!recoveryMode ? (
+              <>
+                <form
+                  className="flex flex-col gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void signIn();
+                  }}
+                >
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm
+                               dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                    placeholder="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    autoFocus
+                  />
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm
+                               dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                    placeholder="password"
+                    type="password"
+                    value={pass}
+                    onChange={(e) => setPass(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="submit"
+                    className="mt-1 w-full px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                               dark:border-gray-600 dark:text-gray-100"
+                  >
+                    Entrar
+                  </button>
+                </form>
+
+                <div className="mt-2 flex flex-col gap-1">
+                  {LinkReset}
+                  {ResetSentBadge}
+                </div>
+              </>
+            ) : (
+              <form
+                className="flex flex-col gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void updatePassword();
+                }}
               >
-                Entrar
-              </button>
-            </form>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm
+                             dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                  placeholder="Nueva contraseña"
+                  type="password"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  autoComplete="new-password"
+                  autoFocus
+                />
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm
+                             dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                  placeholder="Repetir contraseña"
+                  type="password"
+                  value={newPass2}
+                  onChange={(e) => setNewPass2(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="submit"
+                  className="mt-1 w-full px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                             dark:border-gray-600 dark:text-gray-100"
+                >
+                  Guardar contraseña
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}
