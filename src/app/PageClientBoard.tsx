@@ -221,8 +221,14 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   // (debug opcional)
   useEffect(() => {
     const t = setInterval(async () => {
-      const { data } = await supabase.auth.getSession();
-      console.log('[AUTH] session?', !!data.session, 'expires_at', data.session?.expires_at);
+      try {
+        const { data } = await supabase.auth.getSession();
+        console.log('[AUTH] session?', !!data.session, 'expires_at', data.session?.expires_at);
+      } catch (e) {
+        // Evita spam por abort/microcortes
+        if (isTransientNetworkError(e)) return;
+        console.warn('[AUTH] getSession interval failed', e);
+      }
     }, 30_000);
     return () => clearInterval(t);
   }, []);
@@ -333,11 +339,11 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
     const safeLoad = async () => {
       try {
-        await loadCenterConfig();
+        await retry(() => loadCenterConfig(), 4, 500);
       } catch (e) {
         // Si hay fallo de red/abort, no rompemos la UI.
         if (isTransientNetworkError(e)) {
-          console.warn('[AUTH] loadCenterConfig transient error', e);
+          console.warn('[AUTH] loadCenterConfig transient error (giving up for now)', e);
         } else {
           console.warn('[AUTH] loadCenterConfig failed', e);
         }
@@ -492,8 +498,13 @@ function AuthButtons() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      setUserEmail(data.user?.email ?? null);
+      try {
+        const { data } = await supabase.auth.getUser();
+        setUserEmail(data.user?.email ?? null);
+      } catch (e) {
+        if (isTransientNetworkError(e)) return;
+        console.warn('[AUTH] getUser failed', e);
+      }
     })();
 
     const sub = supabase.auth.onAuthStateChange(async (_event, sess) => {
@@ -1025,7 +1036,6 @@ useEffect(() => {
 }, [isMobilePortrait, activeDayKey]);
 
 const unsubRef = useRef<null | (() => void)>(null);
-const rejoinBusyRef = useRef(false);
 
 const refresh = useCallback(async () => {
   if (!centerId) return;
@@ -1049,10 +1059,13 @@ useEffect(() => {
 
   const refreshSafe = async () => {
     if (!alive) return;
+    // si estamos offline, ni lo intentes
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
     try {
       await refresh();
     } catch (e) {
-      // no rompas UI si un fetch falla (sleep / offline / reconexión)
+      if (isTransientNetworkError(e)) return;
       console.warn('[REFRESH] failed', e);
     }
   };
@@ -1060,85 +1073,33 @@ useEffect(() => {
   // 1) primera carga
   void refreshSafe();
 
-  // 2) realtime (guardar en ref para rejoin)
+  // 2) realtime
   unsubRef.current?.();
   unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
 
-  // 3) polling de seguridad
+  // 3) polling suave (menos agresivo)
   const poll = setInterval(() => {
-    console.log('[POLL] tick');
     void refreshSafe();
-  }, 20_000);
+  }, 45_000);
 
-  // 4) rejoin tras reposo / volver a pestaña / volver online
-  const rejoin = async () => {
-    if (!alive) return;
-    if (rejoinBusyRef.current) return;
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-
-    rejoinBusyRef.current = true;
-    console.log('[RECOVER] begin');
-
-    try {
-      await new Promise((r) => setTimeout(r, 700));
-
-      // refresca sesión (con retry)
-      try {
-        await retry(() => supabase.auth.refreshSession(), 4, 500);
-      } catch (e) {
-        console.warn('[RECOVER] refreshSession failed (will still try data)', e);
-      }
-
-      // re-suscribe canal realtime (sin forzar disconnect/connect)
-      try {
-        unsubRef.current?.();
-        unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
-      } catch (e) {
-        console.warn('[RECOVER] resubscribe realtime failed', e);
-      }
-
-      // refresh datos sí o sí
-      await refreshSafe();
-      console.log('[RECOVER] done');
-    } finally {
-      setTimeout(() => {
-        rejoinBusyRef.current = false;
-      }, 800);
-    }
-  };
-
-  // ✅ tras login modal: fuerza rejoin/refresh
+  // 4) eventos mínimos
   const onSignedIn = () => {
-    console.log('[RECOVER] signedin event');
-    void rejoin();
+    console.log('[REFRESH] signedin event');
+    void refreshSafe();
   };
+  const onFocus = () => void refreshSafe();
+  const onOnline = () => void refreshSafe();
 
-  // ✅ extra robusto: si Supabase emite SIGNED_IN / TOKEN_REFRESHED, también rejoin
-  const authSub = supabase.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      console.log('[RECOVER] auth event', event);
-      void rejoin();
-    }
-  });
-
-  const onVis = () => {
-    if (document.visibilityState === 'visible') void rejoin();
-  };
-
-  window.addEventListener('focus', rejoin);
-  window.addEventListener('online', rejoin);
-  document.addEventListener('visibilitychange', onVis);
+  window.addEventListener('focus', onFocus);
+  window.addEventListener('online', onOnline);
   window.addEventListener('salatrack:signedin', onSignedIn);
 
   return () => {
     alive = false;
 
-    window.removeEventListener('focus', rejoin);
-    window.removeEventListener('online', rejoin);
-    document.removeEventListener('visibilitychange', onVis);
+    window.removeEventListener('focus', onFocus);
+    window.removeEventListener('online', onOnline);
     window.removeEventListener('salatrack:signedin', onSignedIn);
-
-    authSub.data.subscription.unsubscribe();
 
     clearInterval(poll);
 
