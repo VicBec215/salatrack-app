@@ -893,7 +893,17 @@ useEffect(() => {
 }, [readOnly]);
 
 // Filtro de sala
-const [roomFilter, setRoomFilter] = useState<RowKey>('__all__');
+// Filtro de sala (persistido)
+const [roomFilter, setRoomFilter] = useState<RowKey>(() => {
+  if (typeof window === 'undefined') return '__all__';
+  return (localStorage.getItem('salatrack_roomfilter') as RowKey) || '__all__';
+});
+
+useEffect(() => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('salatrack_roomfilter', String(roomFilter));
+}, [roomFilter]);
+
 const visibleRows = useMemo(() => {
   if (roomFilter === '__all__') return rows;
   return rows.filter((r) => r === roomFilter);
@@ -1055,6 +1065,7 @@ useEffect(() => {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
     rejoinBusyRef.current = true;
+    setRecovering(true);
     console.log('[RECOVER] begin');
 
     try {
@@ -1088,8 +1099,9 @@ useEffect(() => {
       console.log('[RECOVER] done');
     } finally {
       setTimeout(() => {
-        rejoinBusyRef.current = false;
-      }, 800);
+  rejoinBusyRef.current = false;
+  setRecovering(false);
+}, 800);
     }
   };
 
@@ -1614,6 +1626,36 @@ const swipeHandlers = useSwipeable({
 
 const [fitScreen, setFitScreen] = useState(false);
 
+// Estado de red / recuperación (chip compacto)
+const [recovering, setRecovering] = useState(false);
+const [isOnline, setIsOnline] = useState<boolean>(() => {
+  if (typeof navigator === 'undefined') return true;
+  return navigator.onLine !== false;
+});
+
+useEffect(() => {
+  const onOn = () => setIsOnline(true);
+  const onOff = () => setIsOnline(false);
+  window.addEventListener('online', onOn);
+  window.addEventListener('offline', onOff);
+  return () => {
+    window.removeEventListener('online', onOn);
+    window.removeEventListener('offline', onOff);
+  };
+}, []);
+
+const netLabel = !isOnline ? 'Offline' : recovering ? 'Reconectando…' : 'Online';
+const netTone: 'green' | 'blue' | 'amber' = !isOnline ? 'amber' : recovering ? 'blue' : 'green';
+
+// Métricas rápidas de HOY (respetando filtro de sala)
+const todayStats = useMemo(() => {
+  const base = items.filter((it) => it.day === todayKey);
+  const scoped = roomFilter === '__all__' ? base : base.filter((it) => it.row === roomFilter);
+  const total = scoped.length;
+  const done = scoped.filter((it) => !!it.done).length;
+  return { total, done, pending: Math.max(0, total - done) };
+}, [items, todayKey, roomFilter]);
+
   return (
   <div {...swipeHandlers} className="flex flex-col gap-3">
 
@@ -1685,6 +1727,35 @@ const [fitScreen, setFitScreen] = useState(false);
                 </span>
               </button>
             )}
+            {/* Estado red */}
+<span
+  className={[
+    'inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] whitespace-nowrap',
+    netTone === 'green'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-400/40'
+      : netTone === 'blue'
+      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-400/40'
+      : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-400/40',
+  ].join(' ')}
+  title={netLabel}
+>
+  <span className="inline-block w-2 h-2 rounded-full bg-current opacity-60" />
+  {netLabel}
+</span>
+
+{/* Métrica rápida hoy */}
+<span
+  className="inline-flex items-center gap-2 px-2 py-1 rounded-full border text-[11px] whitespace-nowrap
+             bg-gray-50 text-gray-700 border-gray-200
+             dark:bg-gray-900/40 dark:text-gray-200 dark:border-white/20"
+  title="Resumen del día (según filtro de sala)"
+>
+  <span>Hoy: {todayStats.total}</span>
+  <span className="opacity-70">·</span>
+  <span>Hechos: {todayStats.done}</span>
+  <span className="opacity-70">·</span>
+  <span>Pend: {todayStats.pending}</span>
+</span>
           </div>
 
           {/* DERECHA (desktop) */}
