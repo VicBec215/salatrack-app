@@ -313,64 +313,71 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
   // ─────────────────────────────────────────────────────────────
   // 2) Auth bootstrap + listener (robusto)
-  //    (IMPORTANTE: aquí NO tocamos realtime.disconnect/connect)
+  //    ✅ IMPORTANTE: aunque falle una llamada puntual (AbortError),
+  //    SIEMPRE dejamos el listener activo para que el login/logout
+  //    actualice el rol sin recargar la página.
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    let unsub: { unsubscribe: () => void } | null = null;
     let cancelled = false;
 
+    const safeGetRole = async (hasUser: boolean) => {
+      if (!hasUser) return 'unknown' as const;
+      try {
+        // getMyRole puede fallar si hay un microcorte; lo toleramos
+        return await retry(() => getMyRole(slug), 3, 350);
+      } catch (e) {
+        console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
+        return 'viewer' as const;
+      }
+    };
+
+    const safeLoad = async () => {
+      try {
+        await loadCenterConfig();
+      } catch (e) {
+        // Si hay fallo de red/abort, no rompemos la UI.
+        if (isTransientNetworkError(e)) {
+          console.warn('[AUTH] loadCenterConfig transient error', e);
+        } else {
+          console.warn('[AUTH] loadCenterConfig failed', e);
+        }
+      }
+    };
+
+    // 1) Listener SIEMPRE activo (clave para que no se “quede pillado”)
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      if (cancelled) return;
+
+      const hasUser = !!sess?.user;
+      console.log('[AUTH] onAuthStateChange user =', hasUser);
+
+      setAuthReady(true);
+      setRole(await safeGetRole(hasUser));
+
+      // recarga config (por si cambia el centro/permiso)
+      await safeLoad();
+    });
+
+    // 2) Bootstrap inicial (preferimos getSession: suele ser local y NO se aborta)
     const boot = async () => {
       try {
-        const { data } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getSession();
         if (cancelled) return;
 
-        console.log('[AUTH] mount user =', !!data.user);
+        const hasUser = !!data.session?.user;
+        console.log('[AUTH] mount session user =', hasUser);
+
         setAuthReady(true);
+        setRole(await safeGetRole(hasUser));
 
-        // role depende de slug
-        try {
-          setRole(data.user ? await getMyRole(slug) : 'unknown');
-        } catch (e) {
-          console.warn('[AUTH] getMyRole failed', e);
-          setRole(data.user ? 'viewer' : 'unknown');
-        }
-
-        // Carga config, pero si hay fallo de red NO rompas nada
-        try {
-          await loadCenterConfig();
-        } catch (e) {
-          if (isTransientNetworkError(e)) {
-            console.warn('[AUTH] loadCenterConfig transient error', e);
-          } else {
-            console.warn('[AUTH] loadCenterConfig failed', e);
-          }
-        }
-
-        const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-          if (cancelled) return;
-
-          console.log('[AUTH] onAuthStateChange user =', !!sess?.user);
-          setAuthReady(true);
-
-          try {
-            setRole(sess?.user ? await getMyRole(slug) : 'unknown');
-          } catch (e) {
-            console.warn('[AUTH] getMyRole failed', e);
-            setRole(sess?.user ? 'viewer' : 'unknown');
-          }
-
-          try {
-            await loadCenterConfig();
-          } catch (e) {
-            console.warn('[AUTH] loadCenterConfig failed (will recover in Board)', e);
-          }
-        });
-
-        unsub = listener.subscription;
+        await safeLoad();
       } catch (e) {
+        // ✅ Antes: aquí se hacía return y nos quedábamos SIN listener.
+        // Ahora: el listener ya está puesto; solo marcamos ready y seguimos.
         if (isTransientNetworkError(e)) {
-          console.warn('[AUTH] transient network error in boot', e);
+          console.warn('[AUTH] transient network error in boot (ignored)', e);
           setAuthReady(true);
+          // mantenemos el rol actual (por defecto 'unknown')
           return;
         }
 
@@ -384,7 +391,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
     return () => {
       cancelled = true;
-      if (unsub) unsub.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, [loadCenterConfig, slug]);
 
