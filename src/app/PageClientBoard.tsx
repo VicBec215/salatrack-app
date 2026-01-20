@@ -213,6 +213,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   const [rows, setRows] = useState<RowKey[]>([]);
   const [procs, setProcs] = useState<ProcDef[]>([]);
   const [openRoomsToday, setOpenRoomsToday] = useState<number | null>(null);
+  // Evita cargas solapadas del centro (single-flight)
+  const loadingCenterRef = useRef<Promise<void> | null>(null);
 
   // ─────────────────────────────────────────────────────────────
   // 1) Cargar configuración del centro
@@ -285,23 +287,37 @@ export default function PageClientBoard({ slug }: { slug: string }) {
     const open = sched?.open_rooms ?? roomNames.length ?? null;
     setOpenRoomsToday(typeof open === 'number' ? open : null);
   }, [slug]);
-// ─────────────────────────────────────────────────────────────
+
+  // Wrapper robusto: reutiliza la misma promesa si ya hay una carga en curso
+  const safeLoadCenterConfig = useCallback(async () => {
+    if (loadingCenterRef.current) return loadingCenterRef.current;
+
+    loadingCenterRef.current = (async () => {
+      try {
+        await retry(() => loadCenterConfig(), 4, 500);
+      } finally {
+        loadingCenterRef.current = null;
+      }
+    })();
+
+    return loadingCenterRef.current;
+  }, [loadCenterConfig]);
+  // ─────────────────────────────────────────────────────────────
   // 1b) Cargar configuración del centro SIEMPRE (aunque no haya login)
-  //     Si falla por Abort/Network, reintenta en segundo plano.
+  //     ✅ single-flight + reintento suave solo cuando tiene sentido
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    let retryTimer: any = null;
 
     const run = async () => {
       try {
-        await retry(() => loadCenterConfig(), 6, 500);
+        await safeLoadCenterConfig();
       } catch (e) {
         if (cancelled) return;
 
+        // Si es un abort/transient, no spameamos ni alertamos: reintentamos al volver online/focus
         if (isTransientNetworkError(e)) {
-          console.warn('[CENTER] transient error loading config — will retry', e);
-          retryTimer = setTimeout(run, 2000);
+          console.warn('[CENTER] transient error loading config — will retry on online/focus', e);
           return;
         }
 
@@ -311,11 +327,22 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
     void run();
 
+    const onOnline = () => void run();
+    const onFocus = () => void run();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', onOnline);
+      window.addEventListener('focus', onFocus);
+    }
+
     return () => {
       cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', onOnline);
+        window.removeEventListener('focus', onFocus);
+      }
     };
-  }, [loadCenterConfig]);
+  }, [safeLoadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
   // 2) Auth bootstrap + listener (robusto)
   //    ✅ IMPORTANTE: aunque falle una llamada puntual (AbortError),
@@ -356,6 +383,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
       setAuthReady(true);
       setRole(await safeGetRole(hasUser));
+      // Garantiza que la config del centro esté cargada (sin solapes)
+      void safeLoadCenterConfig();
     });
 
     // 2) Bootstrap inicial (preferimos getSession: suele ser local y NO se aborta)
@@ -369,6 +398,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
 
         setAuthReady(true);
         setRole(await safeGetRole(hasUser));
+        // Garantiza que la config del centro esté cargada (sin solapes)
+        void safeLoadCenterConfig();
       } catch (e) {
         if (isTransientNetworkError(e)) {
           console.warn('[AUTH] transient network error in boot (ignored)', e);
@@ -388,7 +419,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       cancelled = true;
       listener.subscription.unsubscribe();
     };
-  }, [slug]);
+  }, [slug, safeLoadCenterConfig]);
 
   // ─────────────────────────────────────────────────────────────
   // Render
@@ -488,11 +519,11 @@ function AuthButtons() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await supabase.auth.getUser();
-        setUserEmail(data.user?.email ?? null);
+        const { data } = await supabase.auth.getSession();
+        setUserEmail(data.session?.user?.email ?? null);
       } catch (e) {
         if (isTransientNetworkError(e)) return;
-        console.warn('[AUTH] getUser failed', e);
+        console.warn('[AUTH] getSession failed', e);
       }
     })();
 
@@ -546,6 +577,13 @@ function AuthButtons() {
       localStorage.removeItem('salatrack_readonly');
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+
+      // ✅ fuerza refresh del Board (por si algún estado quedó desincronizado)
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.dispatchEvent(new Event('salatrack:signedin'));
+        }, 0);
+      }
     } catch (e) {
       showErr(e);
     }
