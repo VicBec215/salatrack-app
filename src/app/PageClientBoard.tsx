@@ -288,110 +288,90 @@ export default function PageClientBoard({ slug }: { slug: string }) {
     setOpenRoomsToday(typeof open === 'number' ? open : null);
   }, [slug]);
 
-  // Wrapper robusto: reutiliza la misma promesa si ya hay una carga en curso
-  // ✅ Importante: NUNCA debe rechazar (para evitar "Uncaught (in promise) AbortError")
-  const safeLoadCenterConfig = useCallback(async () => {
-    if (loadingCenterRef.current) return loadingCenterRef.current;
-
-    loadingCenterRef.current = (async () => {
-      try {
-        await retry(() => loadCenterConfig(), 4, 500);
-      } catch (e) {
-        // Abort/transient: no alert, no throw
-        if (isTransientNetworkError(e)) {
-          console.warn('[CENTER] transient error loading config (ignored)', e);
-          return;
-        }
-        // Error real: lo mostramos pero NO propagamos
-        showErr(e);
-      } finally {
-        loadingCenterRef.current = null;
-      }
-    })();
-
-    return loadingCenterRef.current;
-  }, [loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
   // 1b) Cargar configuración del centro SIEMPRE (aunque no haya login)
   //     (simplificado: un solo disparo, sin focus/online retries)
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
+    let alive = true;
 
     (async () => {
-      if (cancelled) return;
-      await safeLoadCenterConfig();
+      try {
+        await loadCenterConfig();
+      } catch (e) {
+        if (!alive) return;
+        // Si es un abort/transient no machacamos al usuario
+        if (isTransientNetworkError(e)) {
+          console.warn('[CENTER] transient error loading config (ignored)', e);
+          return;
+        }
+        showErr(e);
+      }
     })();
 
     return () => {
-      cancelled = true;
+      alive = false;
     };
-  }, [safeLoadCenterConfig]);
+  }, [loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
   // 2) Auth bootstrap + listener (robusto)
-  //    ✅ IMPORTANTE: aunque falle una llamada puntual (AbortError),
-  //    SIEMPRE dejamos el listener activo para que el login/logout
-  //    actualice el rol sin recargar la página.
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
+    let alive = true;
 
-    const safeGetRole = async (hasUser: boolean) => {
+    const resolveRole = async (sess: any) => {
+      const hasUser = !!sess?.user;
       if (!hasUser) return 'unknown' as const;
       try {
-        return await retry(() => getMyRole(slug), 3, 350);
+        return await getMyRole(slug);
       } catch (e) {
-        if (!isTransientNetworkError(e)) console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
+        if (!isTransientNetworkError(e)) {
+          console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
+        }
         return 'viewer' as const;
       }
     };
 
-    // 1) Listener SIEMPRE activo (clave para que no se “quede pillado”)
+    // 1) Listener SIEMPRE activo
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      if (cancelled) return;
+      if (!alive) return;
 
-      const hasUser = !!sess?.user;
-      console.log('[AUTH] onAuthStateChange user =', hasUser);
+      console.log('[AUTH] onAuthStateChange user =', !!sess?.user);
+      const nextRole = await resolveRole(sess);
+      if (!alive) return;
 
+      setRole(nextRole);
       setAuthReady(true);
-      const nextRole = await safeGetRole(hasUser);
-      if (!cancelled) setRole(nextRole);
-      // (REMOVED: config reload)
     });
 
-    // 2) Bootstrap inicial (preferimos getSession: suele ser local y NO se aborta)
-    const boot = async () => {
+    // 2) Bootstrap inicial
+    (async () => {
       try {
         const { data } = await supabase.auth.getSession();
-        if (cancelled) return;
+        if (!alive) return;
 
-        const hasUser = !!data.session?.user;
-        console.log('[AUTH] mount session user =', hasUser);
+        console.log('[AUTH] mount session user =', !!data.session?.user);
+        const nextRole = await resolveRole(data.session);
+        if (!alive) return;
 
-        setAuthReady(true);
-        const nextRole = await safeGetRole(hasUser);
-        if (!cancelled) setRole(nextRole);
-        // (REMOVED: config reload)
+        setRole(nextRole);
       } catch (e) {
         if (isTransientNetworkError(e)) {
           console.warn('[AUTH] transient network error in boot (ignored)', e);
-          setAuthReady(true);
-          return;
+        } else {
+          showErr(e);
         }
-
-        showErr(e);
-        setAuthReady(true);
-        setRole('unknown');
+        if (alive) setRole('unknown');
+      } finally {
+        if (alive) setAuthReady(true);
       }
-    };
-
-    void boot();
+    })();
 
     return () => {
-      cancelled = true;
+      alive = false;
       listener.subscription.unsubscribe();
     };
-  }, [slug, safeLoadCenterConfig]);
+  }, [slug]);
 
   // ─────────────────────────────────────────────────────────────
   // Render
@@ -405,8 +385,10 @@ export default function PageClientBoard({ slug }: { slug: string }) {
         <div className="text-sm text-gray-600">
           Inicia sesión para editar. (Modo lectura si no tienes permisos)
         </div>
-      ) : (
+      ) : centerId ? (
         <Board role={role} rows={rows} procs={procs} centerId={centerId} />
+      ) : (
+        <div className="text-sm text-gray-600">Cargando centro…</div>
       )}
     </div>
   );
@@ -529,16 +511,7 @@ function AuthButtons() {
 
       setEmail('');
       setPass('');
-
-      // ✅ cierra modal si estaba abierto
       setOpen(false);
-
-      // ✅ avisa al Board de que ya hay sesión
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          window.dispatchEvent(new Event('salatrack:signedin'));
-        }, 0);
-      }
     } catch (e) {
       showErr(e);
     }
@@ -550,12 +523,9 @@ function AuthButtons() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      // ✅ fuerza refresh del Board (por si algún estado quedó desincronizado)
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          window.dispatchEvent(new Event('salatrack:signedin'));
-        }, 0);
-      }
+      // ✅ actualiza UI inmediatamente
+      setUserEmail(null);
+      setOpen(false);
     } catch (e) {
       showErr(e);
     }
