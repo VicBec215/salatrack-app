@@ -1430,225 +1430,233 @@ const [fitScreen, setFitScreen] = useState(false);
 
   return (
   <div {...swipeHandlers} className="flex flex-col gap-3">
-    <div className="mt-3 flex flex-col gap-2">
-  {/* FILA 1 */}
-  <div className="flex items-center justify-between gap-2">
-    {/* IZQUIERDA */}
-    <div className="flex items-center gap-2">
-      <button
-        className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
-        title="Anterior"
-        onClick={onPrev}
-      >
-        <ArrowLeft className="w-4 h-4" />
-      </button>
 
-      <button
-        className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
-        title="Siguiente"
-        onClick={onNext}
-      >
-        <ArrowRight className="w-4 h-4" />
-      </button>
-
-      <button
-        className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
-                   dark:hover:bg-gray-800 dark:border-white/30"
-        onClick={goToday}
-      >
-        <Calendar className="w-4 h-4" />
-        Hoy
-      </button>
-
-      {/* SOLO LECTURA */}
-      {role === "editor" && (
-        <button
-          type="button"
-          onClick={() => setReadOnly((v) => !v)}
-          className="
-            inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
-            bg-white text-gray-700 border-gray-300 hover:bg-gray-50
-            dark:bg-gray-900 dark:text-white dark:border-white/30 dark:hover:bg-gray-800
-          "
-        >
-          <span className="text-xs">Solo lectura</span>
-
-          <span
-            className={[
-              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-              readOnly ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-700",
-            ].join(" ")}
-          >
-            <span
-              className={[
-                "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
-                readOnly ? "translate-x-5" : "translate-x-1",
-              ].join(" ")}
-            />
-          </span>
-        </button>
-      )}
-    </div>
-
-    {/* DERECHA (desktop) */}
-    <div className="hidden md:flex items-center gap-2">
-      {/* BUSCADOR desktop */}
-      <input
-        className="
-          border rounded-lg px-3 py-2 text-sm w-[260px]
-          dark:bg-gray-900 dark:text-gray-100 dark:border-white/30
-        "
-        placeholder="Buscar…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-
-      {/* EXPORT desktop */}
-      {effectiveRole === "editor" && (
-        <>
-          <select
-            className="border rounded-lg px-3 py-2 text-sm
-              bg-white text-gray-700 border-gray-300 hover:bg-gray-50
-              dark:bg-gray-900 dark:text-gray-200 dark:border-white/30 dark:hover:bg-gray-800"
-            value={exportMode}
-            onChange={(e) => setExportMode(e.target.value as ExportMode)}
-          >
-            <option value="all">Todo</option>
-            <option value="today">Hoy</option>
-            <option value="week">Esta semana</option>
-            <option value="range">Período</option>
-          </select>
-
-          <button
-            className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
-                       dark:hover:bg-gray-800 dark:border-white/30"
-            onClick={() => void exportCSV()}
-          >
-            <Download className="w-4 h-4" />
-            CSV
-          </button>
-        </>
-      )}
-    </div>
-  </div>
-
-  {/* FILA 2 (solo móvil): buscador */}
-  <div className="md:hidden">
-    <input
+    {/* ✅ STICKY HEADER (Paso 1) */}
+    <div
       className="
-        border rounded-lg px-3 py-2 text-sm w-full
-        dark:bg-gray-900 dark:text-gray-100 dark:border-white/30
+        sticky top-0 z-40
+        -mx-4 px-4 pt-3 pb-2
+        bg-white/90 backdrop-blur
+        border-b border-gray-200
+        dark:bg-black/70 dark:border-white/10
       "
-      placeholder="Buscar…"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-    />
-  </div>
-</div>
+    >
+      <div className="mt-3 flex flex-col gap-2">
+        {/* FILA 1 */}
+        <div className="flex items-center justify-between gap-2">
+          {/* IZQUIERDA */}
+          <div className="flex items-center gap-2">
+            <button
+              className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
+              title="Anterior"
+              onClick={onPrev}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+
+            <button
+              className="p-2 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 dark:border-white/30"
+              title="Siguiente"
+              onClick={onNext}
+            >
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
+                         dark:hover:bg-gray-800 dark:border-white/30"
+              onClick={goToday}
+            >
+              <Calendar className="w-4 h-4" />
+              Hoy
+            </button>
+
+            {/* SOLO LECTURA */}
+            {role === "editor" && (
+              <button
+                type="button"
+                onClick={() => setReadOnly((v) => !v)}
+                className="
+                  inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
+                  bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+                  dark:bg-gray-900 dark:text-white dark:border-white/30 dark:hover:bg-gray-800
+                "
+              >
+                <span className="text-xs">Solo lectura</span>
+
+                <span
+                  className={[
+                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                    readOnly ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-700",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+                      readOnly ? "translate-x-5" : "translate-x-1",
+                    ].join(" ")}
+                  />
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* DERECHA (desktop) */}
+          <div className="hidden md:flex items-center gap-2">
+            {/* BUSCADOR desktop */}
+            <input
+              className="
+                border rounded-lg px-3 py-2 text-sm w-[260px]
+                dark:bg-gray-900 dark:text-gray-100 dark:border-white/30
+              "
+              placeholder="Buscar…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            {/* EXPORT desktop */}
+            {effectiveRole === "editor" && (
+              <>
+                <select
+                  className="border rounded-lg px-3 py-2 text-sm
+                    bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+                    dark:bg-gray-900 dark:text-gray-200 dark:border-white/30 dark:hover:bg-gray-800"
+                  value={exportMode}
+                  onChange={(e) => setExportMode(e.target.value as ExportMode)}
+                >
+                  <option value="all">Todo</option>
+                  <option value="today">Hoy</option>
+                  <option value="week">Esta semana</option>
+                  <option value="range">Período</option>
+                </select>
+
+                <button
+                  className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm flex items-center gap-2
+                             dark:hover:bg-gray-800 dark:border-white/30"
+                  onClick={() => void exportCSV()}
+                >
+                  <Download className="w-4 h-4" />
+                  CSV
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* FILA 2 (solo móvil): buscador */}
+        <div className="md:hidden">
+          <input
+            className="
+              border rounded-lg px-3 py-2 text-sm w-full
+              dark:bg-gray-900 dark:text-gray-100 dark:border-white/30
+            "
+            placeholder="Buscar…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+    </div>
 
     {/* ... aquí sigue tu grid etc ... */}
-
-      <div
-  className={[
-    "grid",
-    fitScreen ? "gap-1" : "gap-2",
-    isMobilePortrait
-      ? "grid-cols-[80px_minmax(0,1fr)]"
-      : "grid-cols-[80px_repeat(5,minmax(0,1fr))]",
-  ].join(" ")}
->
-
-<div className="flex items-center">
-  <select
-    className="
-    border rounded px-2 py-1 text-xs
-    text-gray-700 dark:text-gray-200
-    bg-white dark:bg-gray-900
-    border-gray-300 dark:border-gray-600
-    "
-    value={roomFilter}
-    onChange={(e) => setRoomFilter(e.target.value as RowKey)}
-    title="Filtrar por sala"
-  >
-    <option value="__all__">Todas</option>
-    {rows.map((r) => (
-      <option key={r} value={r}>
-        {r}
-      </option>
-    ))}
-  </select>
-</div>
-
-  {visibleDayKeys.map((dk) => {
-  const isToday = dk === todayKey;
-
-  return (
     <div
-      key={dk}
       className={[
-        'text-xs font-semibold text-center rounded-lg py-1 border transition-colors',
-        isToday
-          ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-200 dark:border-rose-300/40'
-          : 'text-gray-500 border-transparent dark:text-gray-300',
-      ].join(' ')}
+        "grid",
+        fitScreen ? "gap-1" : "gap-2",
+        isMobilePortrait
+          ? "grid-cols-[80px_minmax(0,1fr)]"
+          : "grid-cols-[80px_repeat(5,minmax(0,1fr))]",
+      ].join(" ")}
     >
-      <div>{weekdayES(dk)}</div>
-      <div className="text-[11px] font-normal text-gray-400 dark:text-gray-400">
-        {formatDateES(dk)}
+      <div className="flex items-center">
+        <select
+          className="
+            border rounded px-2 py-1 text-xs
+            text-gray-700 dark:text-gray-200
+            bg-white dark:bg-gray-900
+            border-gray-300 dark:border-gray-600
+          "
+          value={roomFilter}
+          onChange={(e) => setRoomFilter(e.target.value as RowKey)}
+          title="Filtrar por sala"
+        >
+          <option value="__all__">Todas</option>
+          {rows.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {visibleDayKeys.map((dk) => {
+        const isToday = dk === todayKey;
+
+        return (
+          <div
+            key={dk}
+            className={[
+              "text-xs font-semibold text-center rounded-lg py-1 border transition-colors",
+              isToday
+                ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-200 dark:border-rose-300/40"
+                : "text-gray-500 border-transparent dark:text-gray-300",
+            ].join(" ")}
+          >
+            <div>{weekdayES(dk)}</div>
+            <div className="text-[11px] font-normal text-gray-400 dark:text-gray-400">
+              {formatDateES(dk)}
+            </div>
+          </div>
+        );
+      })}
+
+      {visibleRows.map((row) => (
+        <RowBlock
+          key={row}
+          role={effectiveRole}
+          row={row}
+          dayKeys={visibleDayKeys}
+          byCell={byCell}
+          draftCell={draftCell}
+          setDraftCell={setDraftCell}
+          editId={editId}
+          setEditId={setEditId}
+          onSubmitAdd={onSubmitAdd}
+          onCancelAdd={onCancelAdd}
+          onSubmitEdit={onSubmitEdit}
+          doDelete={doDelete}
+          doToggleDone={doToggleDone}
+          moveOneUp={moveOneUp}
+          moveOneDown={moveOneDown}
+          moveRowUp={moveRowUp}
+          moveRowDown={moveRowDown}
+          moveDayLeft={moveDayLeft}
+          moveDayRight={moveDayRight}
+          procs={procs}
+          activeDayKey={activeDayKey}
+          todayKey={todayKey}
+          fitScreen={fitScreen}
+        />
+      ))}
     </div>
-  );
-})}
 
-  {/* aquí ya siguen tus RowBlock(...) */}
-
-
-        {visibleRows.map((row) => (
-          <RowBlock
-            key={row}
-            role={effectiveRole}
-            row={row}
-            dayKeys={visibleDayKeys}
-            byCell={byCell}
-            draftCell={draftCell}
-            setDraftCell={setDraftCell}
-            editId={editId}
-            setEditId={setEditId}
-            onSubmitAdd={onSubmitAdd}
-            onCancelAdd={onCancelAdd}
-            onSubmitEdit={onSubmitEdit}
-            doDelete={doDelete}
-            doToggleDone={doToggleDone}
-            moveOneUp={moveOneUp}
-            moveOneDown={moveOneDown}
-            moveRowUp={moveRowUp}
-            moveRowDown={moveRowDown}
-            moveDayLeft={moveDayLeft}
-            moveDayRight={moveDayRight}
-            procs={procs}
-            activeDayKey={activeDayKey}
-            todayKey={todayKey}
-            fitScreen={fitScreen}
-          />
-        ))}
-      </div>
-      {/* ✅ Botón flotante: Ajustar a pantalla */}
-<div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-  <button
-    type="button"
-    onClick={() => setFitScreen((v) => !v)}
-    className="
-      px-3 py-2 rounded-xl border shadow-sm text-sm
-      bg-white text-gray-700 border-gray-300 hover:bg-gray-50
-      dark:bg-gray-900 dark:text-gray-200 dark:border-white/30 dark:hover:bg-gray-800
-    "
-    title={fitScreen ? 'Volver a tamaño normal' : 'Ajustar a pantalla'}
-  >
-    {fitScreen ? 'Normal' : 'Ajustar'}
-  </button>
-</div>
+    {/* ✅ Botón flotante: Ajustar a pantalla */}
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setFitScreen((v) => !v)}
+        className="
+          px-3 py-2 rounded-xl border shadow-sm text-sm
+          bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+          dark:bg-gray-900 dark:text-gray-200 dark:border-white/30 dark:hover:bg-gray-800
+        "
+        title={fitScreen ? "Volver a tamaño normal" : "Ajustar a pantalla"}
+      >
+        {fitScreen ? "Normal" : "Ajustar"}
+      </button>
     </div>
-  );
+  </div>
+);
 }
 function RowBlock({
   role,
