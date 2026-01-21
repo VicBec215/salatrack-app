@@ -345,18 +345,59 @@ useEffect(() => {
     }
   };
 
+  // Mejorada: trata errores transitorios de forma silenciosa, timeout solo local, fallback viewer
   const resolveRole = async (sess: any) => {
     const hasUser = !!sess?.user;
     if (!hasUser) return 'unknown' as const;
 
     try {
-      // ⬅️ si esto se cuelga, NO queremos congelar la UI
-      return await withTimeout(getMyRole(slug), 4000, 'getMyRole');
+      // Timeout solo para el rol (no para el resto del boot)
+      const r = await withTimeout(getMyRole(slug), 4000, 'getMyRole');
+      return r;
     } catch (e) {
-      // fallback seguro
-      console.warn('[AUTH] getMyRole failed/timeout -> viewer', e);
+      // Si es transitorio/abort/timeout, no asustes: caemos a viewer y reintentamos en background
+      if (isTransientNetworkError(e)) {
+        console.warn('[AUTH] getMyRole transient/timeout -> viewer (will retry)', e);
+      } else {
+        console.warn('[AUTH] getMyRole failed -> viewer (will retry)', e);
+      }
       return 'viewer' as const;
     }
+  };
+
+  // Si el role cae a viewer por timeout/transitorio, intentamos “subir” a editor en background
+  // (sin bloquear UI) y sin solapar reintentos.
+  let upgrading: Promise<void> | null = null;
+
+  const upgradeToEditor = async (sess: any) => {
+    if (!sess?.user) return;
+    if (upgrading) return upgrading;
+
+    upgrading = (async () => {
+      const maxTries = 6;
+      for (let i = 0; i < maxTries && alive; i++) {
+        // espera fija (evita martillar) + un pequeño jitter
+        const waitMs = 2200 + Math.floor(Math.random() * 600);
+        await new Promise((r) => setTimeout(r, waitMs));
+        if (!alive) return;
+
+        try {
+          const r2 = await resolveRole(sess);
+          if (!alive) return;
+          if (r2 === 'editor') {
+            console.log('[AUTH] role upgraded to editor on retry');
+            setRole('editor');
+            return;
+          }
+        } catch {
+          // ignoramos y seguimos intentando
+        }
+      }
+    })().finally(() => {
+      upgrading = null;
+    });
+
+    return upgrading;
   };
 
   // Listener SIEMPRE activo
@@ -375,6 +416,11 @@ useEffect(() => {
     const nextRole = await resolveRole(sess);
     if (!alive) return;
     setRole(nextRole);
+
+    // ✅ Retry upgrade si hay usuario pero nos quedamos en viewer (típico tras timeouts/transitorios)
+    if (sess?.user && nextRole === 'viewer') {
+      void upgradeToEditor(sess);
+    }
   });
 
   // Bootstrap inicial
@@ -395,6 +441,11 @@ useEffect(() => {
       const nextRole = await resolveRole(data.session);
       if (!alive) return;
       setRole(nextRole);
+
+      // ✅ Retry upgrade también en el boot (por si entramos con sesión ya guardada)
+      if (data.session?.user && nextRole === 'viewer') {
+        void upgradeToEditor(data.session);
+      }
     } catch (e) {
       console.warn('[AUTH] boot failed -> unknown', e);
       if (!alive) return;

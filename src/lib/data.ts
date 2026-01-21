@@ -163,29 +163,21 @@ export function subscribeItems(centerId: string, onChange: () => void) {
  * - viewer: miembro pero no editor, o no miembro
  */
 export async function getMyRole(centerSlug: string): Promise<'editor' | 'viewer' | 'unknown'> {
-  const { data: auth } = await supabase.auth.getUser();
-  const user = auth.user;
+  // ✅ getSession es local y no depende de red
+  const { data: s } = await supabase.auth.getSession();
+  const user = s.session?.user;
   if (!user) return 'unknown';
 
-  // center_id
-  const { data: center, error: cErr } = await supabase
-    .from('centers')
-    .select('id')
-    .eq('slug', centerSlug)
-    .single();
-
-  if (cErr || !center?.id) return 'viewer';
-
-  // membership
-  const { data: mem, error: mErr } = await supabase
+  // ✅ 1 sola query (join) en vez de 2
+  const { data, error } = await supabase
     .from('center_members')
-    .select('role')
-    .eq('center_id', center.id)
+    .select('role, centers!inner(slug)')
     .eq('user_id', user.id)
+    .eq('centers.slug', centerSlug)
     .maybeSingle();
 
-  if (mErr) throw mErr;
+  if (error) throw error;
 
-  const role = (mem?.role ?? 'viewer').toLowerCase();
+  const role = String(data?.role ?? 'viewer').toLowerCase();
   return role === 'admin' || role === 'editor' ? 'editor' : 'viewer';
 }
