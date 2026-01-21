@@ -327,64 +327,87 @@ export default function PageClientBoard({ slug }: { slug: string }) {
     };
   }, [loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
-  // 2) Auth bootstrap + listener (robusto)
   // ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    let alive = true;
+// 2) Auth bootstrap + listener (NO bloqueante + timeout)
+// ─────────────────────────────────────────────────────────────
+useEffect(() => {
+  let alive = true;
 
-    const resolveRole = async (sess: any) => {
-      const hasUser = !!sess?.user;
-      if (!hasUser) return 'unknown' as const;
-      try {
-        return await getMyRole(slug);
-      } catch (e) {
-        if (!isTransientNetworkError(e)) {
-          console.warn('[AUTH] getMyRole failed (fallback viewer)', e);
-        }
-        return 'viewer' as const;
-      }
-    };
-
-    // 1) Listener SIEMPRE activo
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      if (!alive) return;
-
-      console.log('[AUTH] onAuthStateChange user =', !!sess?.user);
-      const nextRole = await resolveRole(sess);
-      if (!alive) return;
-
-      setRole(nextRole);
-      setAuthReady(true);
+  const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T> => {
+    let t: any;
+    const timeout = new Promise<never>((_, rej) => {
+      t = setTimeout(() => rej(new Error(`Timeout: ${label}`)), ms);
     });
+    try {
+      return await Promise.race([p, timeout]);
+    } finally {
+      clearTimeout(t);
+    }
+  };
 
-    // 2) Bootstrap inicial
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!alive) return;
+  const resolveRole = async (sess: any) => {
+    const hasUser = !!sess?.user;
+    if (!hasUser) return 'unknown' as const;
 
-        console.log('[AUTH] mount session user =', !!data.session?.user);
-        const nextRole = await resolveRole(data.session);
-        if (!alive) return;
+    try {
+      // ⬅️ si esto se cuelga, NO queremos congelar la UI
+      return await withTimeout(getMyRole(slug), 4000, 'getMyRole');
+    } catch (e) {
+      // fallback seguro
+      console.warn('[AUTH] getMyRole failed/timeout -> viewer', e);
+      return 'viewer' as const;
+    }
+  };
 
-        setRole(nextRole);
-      } catch (e) {
-        if (isTransientNetworkError(e)) {
-          console.warn('[AUTH] transient network error in boot (ignored)', e);
-        } else {
-          showErr(e);
-        }
-        if (alive) setRole('unknown');
-      } finally {
-        if (alive) setAuthReady(true);
-      }
-    })();
+  // Listener SIEMPRE activo
+  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+    if (!alive) return;
 
-    return () => {
-      alive = false;
-      listener.subscription.unsubscribe();
-    };
-  }, [slug]);
+    console.log('[AUTH] onAuthStateChange user =', !!sess?.user);
+
+    // ✅ NO bloquees la UI esperando nada
+    setAuthReady(true);
+
+    // Optimista: si hay usuario, al menos viewer mientras resolvemos
+    setRole(sess?.user ? 'viewer' : 'unknown');
+
+    // Luego intentamos resolver el rol real con timeout
+    const nextRole = await resolveRole(sess);
+    if (!alive) return;
+    setRole(nextRole);
+  });
+
+  // Bootstrap inicial
+  (async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!alive) return;
+
+      console.log('[AUTH] mount session user =', !!data.session?.user);
+
+      // ✅ UI lista ya
+      setAuthReady(true);
+
+      // Optimista
+      setRole(data.session?.user ? 'viewer' : 'unknown');
+
+      // Rol real (con timeout)
+      const nextRole = await resolveRole(data.session);
+      if (!alive) return;
+      setRole(nextRole);
+    } catch (e) {
+      console.warn('[AUTH] boot failed -> unknown', e);
+      if (!alive) return;
+      setRole('unknown');
+      setAuthReady(true);
+    }
+  })();
+
+  return () => {
+    alive = false;
+    listener.subscription.unsubscribe();
+  };
+}, [slug]);
 
   // ─────────────────────────────────────────────────────────────
   // Render
