@@ -2115,90 +2115,107 @@ const [fitScreen, setFitScreen] = useState(false);
                 No hay pacientes ingresados.
               </div>
             ) : (
-              <div className="space-y-3">
-                {inpatients.map((r) => (
-                  <div
-                    key={r.id}
-                    className="
-                      rounded-xl border p-3
-                      border-gray-200 bg-white
-                      dark:border-gray-800 dark:bg-gray-900/30
-                    "
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          ID: <span className="font-mono">{r.source_item_id}</span>
+              <div className="space-y-2">
+                {inpatients.map((r) => {
+                  const proc = items.find((it) => it.id === r.source_item_id)?.proc;
+
+                  return (
+                    <div
+                      key={r.id}
+                      className="
+                        rounded-xl border p-2
+                        border-gray-200 bg-white
+                        dark:border-gray-800 dark:bg-gray-900/30
+                      "
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+                            {r.name ?? 'Paciente'}
+                          </div>
+
+                          {proc ? (
+                            <div className="mt-1">
+                              <span
+                                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border"
+                                style={{
+                                  backgroundColor: '#EEF2FF',
+                                  color: '#1F2937',
+                                  borderColor: 'rgba(0,0,0,0.10)',
+                                }}
+                                title="Procedimiento (copiado de la pizarra)"
+                              >
+                                {String(proc)}
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="mt-1 font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
-                          {r.name ?? 'Paciente'}
-                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => void dischargeInpatient(r.id)}
+                          className="
+                            px-3 py-2 rounded-lg border text-sm
+                            bg-white hover:bg-gray-50 border-gray-300 text-gray-700
+                            dark:bg-gray-900 dark:hover:bg-gray-800 dark:border-white/20 dark:text-gray-100
+                          "
+                          title="Dar de alta (quitar del listado)"
+                        >
+                          Dar de alta
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => void dischargeInpatient(r.id)}
-                        className="
-                          px-3 py-2 rounded-lg border text-sm
-                          bg-white hover:bg-gray-50 border-gray-300 text-gray-700
-                          dark:bg-gray-900 dark:hover:bg-gray-800 dark:border-white/20 dark:text-gray-100
-                        "
-                        title="Dar de alta (quitar del listado)"
-                      >
-                        Dar de alta
-                      </button>
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                            Cama
+                          </div>
+                          <input
+                            className="w-full border rounded-lg px-3 py-1.5 text-sm
+                                       dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                            value={r.bed ?? ''}
+                            onChange={(e) =>
+                              updateInpatientFieldDebounced(r.id, { bed: e.target.value })
+                            }
+                            placeholder="Cama / Habitación"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                            Diagnóstico
+                          </div>
+                          <input
+                            className="w-full border rounded-lg px-3 py-1.5 text-sm
+                                       dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                            value={r.dx ?? ''}
+                            onChange={(e) =>
+                              updateInpatientFieldDebounced(r.id, { dx: e.target.value })
+                            }
+                            placeholder="Dx"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                            Evolución
+                          </div>
+                          <textarea
+                            className="w-full border rounded-lg px-3 py-1.5 text-sm min-h-[64px]
+                                       dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                            value={r.evolution ?? ''}
+                            onChange={(e) =>
+                              updateInpatientFieldDebounced(r.id, {
+                                evolution: e.target.value,
+                              })
+                            }
+                            placeholder="Escribe la evolución…"
+                          />
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
-                          Cama
-                        </div>
-                        <input
-                          className="w-full border rounded-lg px-3 py-2 text-sm
-                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
-                          value={r.bed ?? ''}
-                          onChange={(e) =>
-                            updateInpatientFieldDebounced(r.id, { bed: e.target.value })
-                          }
-                          placeholder="Cama / Habitación"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
-                          Diagnóstico
-                        </div>
-                        <input
-                          className="w-full border rounded-lg px-3 py-2 text-sm
-                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
-                          value={r.dx ?? ''}
-                          onChange={(e) =>
-                            updateInpatientFieldDebounced(r.id, { dx: e.target.value })
-                          }
-                          placeholder="Dx"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
-                          Evolución
-                        </div>
-                        <textarea
-                          className="w-full border rounded-lg px-3 py-2 text-sm min-h-[90px]
-                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
-                          value={r.evolution ?? ''}
-                          onChange={(e) =>
-                            updateInpatientFieldDebounced(r.id, {
-                              evolution: e.target.value,
-                            })
-                          }
-                          placeholder="Escribe la evolución…"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
