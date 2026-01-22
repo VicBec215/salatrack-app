@@ -25,6 +25,20 @@ import {
 import type { Item as DbItem } from '@/lib/data';
 type Item = DbItem;
 
+// Ingresados (tabla inpatients)
+type InpatientRow = {
+  id: string;
+  center_id: string;
+  source_item_id: string;
+  name: string | null;
+  bed: string | null;
+  dx: string | null;
+  evolution: string | null;
+  is_active: boolean;
+  admitted_at: string;
+  discharged_at: string | null;
+};
+
 import {
   ArrowLeft,
   ArrowRight,
@@ -41,6 +55,8 @@ import {
   Download,
   CheckCircle2,
   Circle,
+  BedDouble,
+  Loader2,
 } from 'lucide-react';
 
 /* ===== helpers (UNA sola vez) ===== */
@@ -970,6 +986,153 @@ const [weekStart, setWeekStart] = useState<Date>(() => {
   const [items, setItems] = useState<Item[]>([]);
   const [search, setSearch] = useState('');
 
+  // ─────────────────────────────────────────────
+// Ingresados
+// ─────────────────────────────────────────────
+const [inpatientsOpen, setInpatientsOpen] = useState(false);
+const [inpatients, setInpatients] = useState<InpatientRow[]>([]);
+const [inpatientsLoading, setInpatientsLoading] = useState(false);
+const [inpatientSet, setInpatientSet] = useState<Set<string>>(new Set()); // source_item_id
+const saveTimersRef = useRef<Record<string, any>>({});
+
+const refreshInpatients = useCallback(async () => {
+  if (!centerId) return;
+  setInpatientsLoading(true);
+  try {
+    const { data, error } = await supabase
+      .from('inpatients')
+      .select('*')
+      .eq('center_id', centerId)
+      .eq('is_active', true)
+      .order('admitted_at', { ascending: false });
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as InpatientRow[];
+    setInpatients(rows);
+    setInpatientSet(new Set(rows.map((r) => r.source_item_id)));
+  } catch (e) {
+    console.warn('[INP] refresh failed', e);
+  } finally {
+    setInpatientsLoading(false);
+  }
+}, [centerId]);
+
+useEffect(() => {
+  if (!inpatientsOpen) return;
+  void refreshInpatients();
+}, [inpatientsOpen, refreshInpatients]);
+
+const toggleInpatient = useCallback(
+  async (it: Item) => {
+    if (!centerId) return;
+    const isIn = inpatientSet.has(it.id);
+
+    try {
+      if (isIn) {
+        // Dar de alta: desactivar
+        const { error } = await supabase
+          .from('inpatients')
+          .update({ is_active: false, discharged_at: new Date().toISOString() })
+          .eq('center_id', centerId)
+          .eq('source_item_id', it.id)
+          .eq('is_active', true);
+
+        if (error) throw error;
+
+        setInpatientSet((prev) => {
+          const n = new Set(prev);
+          n.delete(it.id);
+          return n;
+        });
+        setInpatients((prev) => prev.filter((r) => r.source_item_id !== it.id));
+        return;
+      }
+
+      // Ingresar: insertar
+      const payload = {
+        center_id: centerId,
+        source_item_id: it.id,
+        name: it.name ?? null,
+        bed: it.room ?? null,
+        dx: it.dx ?? null,
+        evolution: null,
+        is_active: true,
+        admitted_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('inpatients')
+        .insert(payload)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      const row = data as InpatientRow;
+      setInpatients((prev) => [row, ...prev]);
+      setInpatientSet((prev) => {
+        const n = new Set(prev);
+        n.add(it.id);
+        return n;
+      });
+    } catch (e) {
+      console.warn('[INP] toggle failed', e);
+    }
+  },
+  [centerId, inpatientSet]
+);
+
+const updateInpatientFieldDebounced = useCallback(
+  (rowId: string, patch: Partial<InpatientRow>) => {
+    // Optimista en UI
+    setInpatients((prev) =>
+      prev.map((r) => (r.id === rowId ? ({ ...r, ...patch } as InpatientRow) : r))
+    );
+
+    const timers = saveTimersRef.current;
+    if (timers[rowId]) clearTimeout(timers[rowId]);
+
+    timers[rowId] = setTimeout(async () => {
+      try {
+        const { error } = await supabase.from('inpatients').update(patch).eq('id', rowId);
+        if (error) throw error;
+      } catch (e) {
+        console.warn('[INP] update failed', e);
+      }
+    }, 700);
+  },
+  []
+);
+
+const dischargeInpatient = useCallback(
+  async (rowId: string) => {
+    try {
+      const row = inpatients.find((r) => r.id === rowId);
+
+      const { error } = await supabase
+        .from('inpatients')
+        .update({ is_active: false, discharged_at: new Date().toISOString() })
+        .eq('id', rowId);
+
+      if (error) throw error;
+
+      setInpatients((prev) => prev.filter((r) => r.id !== rowId));
+
+      if (row?.source_item_id) {
+        setInpatientSet((prev) => {
+          const n = new Set(prev);
+          n.delete(row.source_item_id);
+          return n;
+        });
+      }
+    } catch (e) {
+      console.warn('[INP] discharge failed', e);
+    }
+  },
+  [inpatients]
+);
+
   const [draftCell, setDraftCell] = useState<{ day: string; row: RowKey } | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
 
@@ -1678,6 +1841,31 @@ const [fitScreen, setFitScreen] = useState(false);
                 </span>
               </button>
             )}
+            {/* INGRESADOS */}
+{effectiveRole === 'editor' && (
+  <button
+    type="button"
+    onClick={() => setInpatientsOpen(true)}
+    className="
+      inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-sm
+      bg-white text-gray-700 border-gray-300 hover:bg-gray-50
+      dark:bg-gray-900 dark:text-white dark:border-white/30 dark:hover:bg-gray-800
+    "
+    title="Ingresados"
+  >
+    <BedDouble className="w-4 h-4" />
+    <span className="text-xs hidden sm:inline">Ingresados</span>
+    <span
+      className="
+        text-[11px] px-2 py-0.5 rounded-full border
+        bg-gray-50 border-gray-200 text-gray-700
+        dark:bg-gray-800 dark:border-white/20 dark:text-gray-200
+      "
+    >
+      {inpatientSet.size}
+    </span>
+  </button>
+)}
           </div>
 
           {/* DERECHA (desktop) */}
@@ -1814,6 +2002,8 @@ const [fitScreen, setFitScreen] = useState(false);
           procs={procs}
           activeDayKey={activeDayKey}
           todayKey={todayKey}
+          toggleInpatient={toggleInpatient}
+          inpatientSet={inpatientSet}
           fitScreen={fitScreen}
         />
       ))}
@@ -1834,6 +2024,157 @@ const [fitScreen, setFitScreen] = useState(false);
         {fitScreen ? "Normal" : "Ajustar"}
       </button>
     </div>
+
+    {/* Modal: Ingresados */}
+    {inpatientsOpen && (
+      <div className="fixed inset-0 z-[60]">
+        {/* overlay */}
+        <button
+          className="absolute inset-0 bg-black/40"
+          onClick={() => setInpatientsOpen(false)}
+          aria-label="Cerrar"
+          type="button"
+        />
+
+        {/* panel */}
+        <div
+          className="
+            absolute left-1/2 top-1/2 w-[94vw] max-w-3xl -translate-x-1/2 -translate-y-1/2
+            rounded-2xl border bg-white shadow-xl
+            dark:bg-gray-950 dark:border-gray-700
+          "
+        >
+          <div className="flex items-center justify-between p-4 border-b dark:border-gray-800">
+            <div className="flex items-center gap-2">
+              <BedDouble className="w-5 h-5 text-gray-600 dark:text-gray-200" />
+              <div className="font-semibold dark:text-gray-100">Ingresados</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                ({inpatients.length})
+              </div>
+            </div>
+
+            <button
+              className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
+                         dark:border-gray-700 dark:text-gray-100"
+              onClick={() => setInpatientsOpen(false)}
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="p-4 max-h-[72vh] overflow-auto">
+            {inpatientsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Cargando…
+              </div>
+            ) : inpatients.length === 0 ? (
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                No hay pacientes ingresados.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {inpatients.map((r) => (
+                  <div
+                    key={r.id}
+                    className="
+                      rounded-xl border p-3
+                      border-gray-200 bg-white
+                      dark:border-gray-800 dark:bg-gray-900/30
+                    "
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          ID: <span className="font-mono">{r.source_item_id}</span>
+                        </div>
+                        <div className="mt-1 font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+                          {r.name ?? 'Paciente'}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => void dischargeInpatient(r.id)}
+                        className="
+                          px-3 py-2 rounded-lg border text-sm
+                          bg-white hover:bg-gray-50 border-gray-300 text-gray-700
+                          dark:bg-gray-900 dark:hover:bg-gray-800 dark:border-white/20 dark:text-gray-100
+                        "
+                        title="Dar de alta (quitar del listado)"
+                      >
+                        Dar de alta
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                          Cama
+                        </div>
+                        <input
+                          className="w-full border rounded-lg px-3 py-2 text-sm
+                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                          value={r.bed ?? ''}
+                          onChange={(e) =>
+                            updateInpatientFieldDebounced(r.id, { bed: e.target.value })
+                          }
+                          placeholder="Cama / Habitación"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                          Diagnóstico
+                        </div>
+                        <input
+                          className="w-full border rounded-lg px-3 py-2 text-sm
+                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                          value={r.dx ?? ''}
+                          onChange={(e) =>
+                            updateInpatientFieldDebounced(r.id, { dx: e.target.value })
+                          }
+                          placeholder="Dx"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                          Evolución
+                        </div>
+                        <textarea
+                          className="w-full border rounded-lg px-3 py-2 text-sm min-h-[90px]
+                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                          value={r.evolution ?? ''}
+                          onChange={(e) =>
+                            updateInpatientFieldDebounced(r.id, {
+                              evolution: e.target.value,
+                            })
+                          }
+                          placeholder="Escribe la evolución…"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t dark:border-gray-800 flex justify-end">
+            <button
+              className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm
+                         dark:hover:bg-gray-800 dark:border-white/20 dark:text-gray-100"
+              onClick={() => setInpatientsOpen(false)}
+              type="button"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
 );
 }
@@ -1857,6 +2198,8 @@ function RowBlock({
   moveRowDown,
   moveDayLeft,
   moveDayRight,
+  toggleInpatient,
+  inpatientSet,
   procs,
   activeDayKey,
   todayKey,
@@ -1971,6 +2314,23 @@ function RowBlock({
     <button className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Hecho" onClick={() => doToggleDone(it)}>
       {it.done ? <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="w-4 h-4 text-gray-500 dark:text-gray-30" />}
     </button>
+
+    {/* ✅ Ingresado (cama): solo editor */}
+{role === 'editor' && (
+  <button
+    type="button"
+    className={[
+      'p-1 rounded border transition-colors',
+      'bg-gray-50 border-gray-200 hover:bg-gray-100',
+      'dark:bg-gray-800/60 dark:border-white/20 dark:hover:bg-gray-800',
+      inpatientSet?.has(it.id) ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-300',
+    ].join(' ')}
+    title={inpatientSet?.has(it.id) ? 'Ingresado (click para alta)' : 'Marcar como ingresado'}
+    onClick={() => toggleInpatient(it)}
+  >
+    <BedDouble className="w-4 h-4" />
+  </button>
+)}
 
     {/* ✅ Todo lo demás SOLO si editor, manteniendo el orden */}
     {role === 'editor' && (
