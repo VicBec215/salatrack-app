@@ -240,11 +240,14 @@ export default function PageClientBoard({ slug }: { slug: string }) {
     if (loadingCenterRef.current) return loadingCenterRef.current;
 
     const p = (async () => {
+      // NOTE: usamos limit(1)+maybeSingle() para evitar errores si hay 0 o >1 centros con el mismo slug
       const { data: center, error: cErr } = await supabase
         .from('centers')
         .select('id, slug, name')
         .eq('slug', slug)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (cErr) throw cErr;
       if (!center?.id) throw new Error(`Centro no encontrado: ${slug}`);
@@ -300,6 +303,8 @@ export default function PageClientBoard({ slug }: { slug: string }) {
         .select('open_rooms')
         .eq('center_id', center.id)
         .eq('day', todayISO)
+        .order('day', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (sErr) throw sErr;
