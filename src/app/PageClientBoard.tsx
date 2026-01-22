@@ -1010,6 +1010,8 @@ const [inpatientsLoading, setInpatientsLoading] = useState(false);
 const [inpatientSet, setInpatientSet] = useState<Set<string>>(new Set()); // source_item_id
 const saveTimersRef = useRef<Record<string, any>>({});
 
+const inpatientInFlightRef = useRef<Set<string>>(new Set());
+
 const refreshInpatients = useCallback(async () => {
   if (!centerId) return;
   setInpatientsLoading(true);
@@ -1034,6 +1036,12 @@ const refreshInpatients = useCallback(async () => {
 }, [centerId]);
 
 useEffect(() => {
+  // Mantener inpatientSet sincronizado siempre (para que viewers vean la cama verde)
+  if (!centerId) return;
+  void refreshInpatients();
+}, [centerId, refreshInpatients]);
+
+useEffect(() => {
   if (!inpatientsOpen) return;
   void refreshInpatients();
 }, [inpatientsOpen, refreshInpatients]);
@@ -1041,9 +1049,15 @@ useEffect(() => {
 const toggleInpatient = useCallback(
   async (it: Item) => {
     if (!centerId) return;
-    const isIn = inpatientSet.has(it.id);
+
+    // evita doble-click / llamadas solapadas
+    const key = String(it.id);
+    if (inpatientInFlightRef.current.has(key)) return;
+    inpatientInFlightRef.current.add(key);
 
     try {
+      const isIn = inpatientSet.has(it.id);
+
       if (isIn) {
         // Dar de alta: desactivar
         const { error } = await supabase
@@ -1055,12 +1069,16 @@ const toggleInpatient = useCallback(
 
         if (error) throw error;
 
+        // Optimista
         setInpatientSet((prev) => {
           const n = new Set(prev);
           n.delete(it.id);
           return n;
         });
         setInpatients((prev) => prev.filter((r) => r.source_item_id !== it.id));
+
+        // Sync
+        void refreshInpatients();
         return;
       }
 
@@ -1074,28 +1092,34 @@ const toggleInpatient = useCallback(
         evolution: null,
         is_active: true,
         admitted_at: new Date().toISOString(),
+        discharged_at: null,
       };
 
-      const { data, error } = await supabase
-        .from('inpatients')
-        .insert(payload)
-        .select('*')
-        .single();
+      // IMPORTANTÍSIMO: NO uses .select().single() aquí
+      const { error: insErr } = await supabase.from('inpatients').insert(payload);
 
-      if (error) throw error;
+      if (insErr) {
+        const code = (insErr as any).code;
+        // 23505 / 409 Conflict => ya existía activo (carrera / estado desincronizado). Lo tratamos como OK.
+        if (code !== '23505') throw insErr;
+      }
 
-      const row = data as InpatientRow;
-      setInpatients((prev) => [row, ...prev]);
+      // Optimista
       setInpatientSet((prev) => {
         const n = new Set(prev);
         n.add(it.id);
         return n;
       });
+
+      // Sync (para que el modal liste bien)
+      await refreshInpatients();
     } catch (e) {
       console.warn('[INP] toggle failed', e);
+    } finally {
+      inpatientInFlightRef.current.delete(String(it.id));
     }
   },
-  [centerId, inpatientSet]
+  [centerId, inpatientSet, refreshInpatients]
 );
 
 const updateInpatientFieldDebounced = useCallback(
@@ -1179,6 +1203,7 @@ const visibleRows = useMemo(() => {
 
 // rol efectivo: si editor + readOnly => se comporta como viewer
 const effectiveRole = (role === "editor" && readOnly) ? "viewer" : role;
+const isEditorUser = role === 'editor';
 
 // Semana (L-V) en ISO (semana visible)
 const dayKeys = useMemo(() => {
@@ -1857,7 +1882,7 @@ const [fitScreen, setFitScreen] = useState(false);
               </button>
             )}
             {/* INGRESADOS */}
-{effectiveRole === 'editor' && (
+{isEditorUser && (
   <button
     type="button"
     onClick={() => setInpatientsOpen(true)}
@@ -1996,6 +2021,7 @@ const [fitScreen, setFitScreen] = useState(false);
         <RowBlock
           key={row}
           role={effectiveRole}
+          isEditorUser={isEditorUser}
           row={row}
           dayKeys={visibleDayKeys}
           byCell={byCell}
@@ -2195,6 +2221,7 @@ const [fitScreen, setFitScreen] = useState(false);
 }
 function RowBlock({
   role,
+  isEditorUser,
   row,
   dayKeys,
   byCell,
@@ -2330,22 +2357,39 @@ function RowBlock({
       {it.done ? <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="w-4 h-4 text-gray-500 dark:text-gray-30" />}
     </button>
 
-    {/* ✅ Ingresado (cama): solo editor */}
-{role === 'editor' && (
-  <button
-    type="button"
-    className={[
-      'p-1 rounded border transition-colors',
-      'bg-gray-50 border-gray-200 hover:bg-gray-100',
-      'dark:bg-gray-800/60 dark:border-white/20 dark:hover:bg-gray-800',
-      inpatientSet?.has(it.id) ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-300',
-    ].join(' ')}
-    title={inpatientSet?.has(it.id) ? 'Ingresado (click para alta)' : 'Marcar como ingresado'}
-    onClick={() => toggleInpatient(it)}
-  >
-    <BedDouble className="w-4 h-4" />
-  </button>
-)}
+    {/* ✅ Ingresado (cama): visible para editores incluso en modo solo lectura; clic solo si editor efectivo */}
+    {isEditorUser && (
+      <button
+        type="button"
+        disabled={role !== 'editor'}
+        className={[
+          'p-1 rounded border transition-colors',
+          'bg-gray-50 border-gray-200',
+          'dark:bg-gray-800/60 dark:border-white/20',
+          inpatientSet?.has(it.id)
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-gray-500 dark:text-gray-300',
+          role === 'editor'
+            ? 'hover:bg-gray-100 dark:hover:bg-gray-800'
+            : 'opacity-70 cursor-default',
+        ].join(' ')}
+        title={
+          inpatientSet?.has(it.id)
+            ? role === 'editor'
+              ? 'Ingresado (click para alta)'
+              : 'Ingresado'
+            : role === 'editor'
+              ? 'Marcar como ingresado'
+              : 'No ingresado'
+        }
+        onClick={() => {
+          if (role !== 'editor') return;
+          toggleInpatient(it);
+        }}
+      >
+        <BedDouble className="w-4 h-4" />
+      </button>
+    )}
 
     {/* ✅ Todo lo demás SOLO si editor, manteniendo el orden */}
     {role === 'editor' && (
