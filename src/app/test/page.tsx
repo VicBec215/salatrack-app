@@ -1,5 +1,5 @@
 import PageClientBoard from "../PageClientBoard";
 
 export default function TestPage() {
-  return <PageClientBoard slug="Salatrack" />;
+  return <PageClientBoard slug="test" />;
 }

@@ -215,7 +215,17 @@ function InlineEditorCard({
 }
 
 /* ===== raíz cliente (/test) ===== */
-export default function PageClientBoard({ slug }: { slug: string }) {
+export default function PageClientBoard({ slug }: { slug?: string }) {
+  // slug robusto: si no llega por props, lo inferimos del pathname (/test -> "test")
+  const centerSlug = useMemo(() => {
+    const fromProps = typeof slug === 'string' ? slug.trim() : '';
+    if (fromProps) return fromProps.toLowerCase();
+
+    if (typeof window === 'undefined') return '';
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    const fromPath = (parts[0] || '').trim();
+    return fromPath ? fromPath.toLowerCase() : '';
+  }, [slug]);
   
 
   // ─────────────────────────────────────────────────────────────
@@ -225,7 +235,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
   const [role, setRole] = useState<'editor' | 'viewer' | 'unknown'>('unknown');
 
   const [centerId, setCenterId] = useState<string | null>(null);
-  const [centerName, setCenterName] = useState<string>(slug || '');
+  const [centerName, setCenterName] = useState<string>(centerSlug || '');
   const [rows, setRows] = useState<RowKey[]>([]);
   const [procs, setProcs] = useState<ProcDef[]>([]);
   const [openRoomsToday, setOpenRoomsToday] = useState<number | null>(null);
@@ -244,16 +254,16 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       const { data: center, error: cErr } = await supabase
         .from('centers')
         .select('id, slug, name')
-        .eq('slug', slug)
+        .eq('slug', centerSlug)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (cErr) throw cErr;
-      if (!center?.id) throw new Error(`Centro no encontrado: ${slug}`);
+      if (!center?.id) throw new Error(`Centro no encontrado: ${centerSlug || '(slug vacío)'}`);
 
       setCenterId(center.id);
-      setCenterName(center.name || slug);
+      setCenterName(center.name || centerSlug);
 
       // Rooms (filas)
       const { data: roomsData, error: rErr } = await supabase
@@ -320,7 +330,7 @@ export default function PageClientBoard({ slug }: { slug: string }) {
       // libera el lock aunque haya error
       loadingCenterRef.current = null;
     }
-  }, [slug]);
+  }, [centerSlug]);
 
   // ─────────────────────────────────────────────────────────────
   // 1b) Cargar configuración del centro SIEMPRE (aunque no haya login)
@@ -373,7 +383,7 @@ useEffect(() => {
 
     try {
       // Timeout solo para el rol (no para el resto del boot)
-      const r = await withTimeout(getMyRole(slug), 4000, 'getMyRole');
+      const r = await withTimeout(getMyRole(centerSlug), 4000, 'getMyRole');
       return r;
     } catch (e) {
       // Si es transitorio/abort/timeout, no asustes: caemos a viewer y reintentamos en background
@@ -479,7 +489,7 @@ useEffect(() => {
     alive = false;
     listener.subscription.unsubscribe();
   };
-}, [slug]);
+}, [centerSlug]);
 
   // ─────────────────────────────────────────────────────────────
   // Render
