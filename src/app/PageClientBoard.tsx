@@ -1008,6 +1008,7 @@ const [inpatientsOpen, setInpatientsOpen] = useState(false);
 const [inpatients, setInpatients] = useState<InpatientRow[]>([]);
 const [inpatientsLoading, setInpatientsLoading] = useState(false);
 const [inpatientSet, setInpatientSet] = useState<Set<string>>(new Set()); // source_item_id
+const [inpatientProcMap, setInpatientProcMap] = useState<Record<string, string>>({});
 const saveTimersRef = useRef<Record<string, any>>({});
 
 const inpatientInFlightRef = useRef<Set<string>>(new Set());
@@ -1027,7 +1028,29 @@ const refreshInpatients = useCallback(async () => {
 
     const rows = (data ?? []) as InpatientRow[];
     setInpatients(rows);
-    setInpatientSet(new Set(rows.map((r) => r.source_item_id)));
+    const ids = rows.map((r) => r.source_item_id).filter(Boolean);
+    setInpatientSet(new Set(ids));
+
+    // Proc "copiado" desde la pizarra: puede no estar en la semana visible, así que lo pedimos por id
+    if (ids.length) {
+      try {
+        const { data: itData, error: itErr } = await supabase
+          .from('items')
+          .select('id, proc')
+          .in('id', ids);
+        if (itErr) throw itErr;
+        const map: Record<string, string> = {};
+        for (const x of itData ?? []) {
+          if (x?.id) map[String(x.id)] = String((x as any).proc ?? '');
+        }
+        setInpatientProcMap(map);
+      } catch (e) {
+        console.warn('[INP] proc lookup failed', e);
+        setInpatientProcMap({});
+      }
+    } else {
+      setInpatientProcMap({});
+    }
   } catch (e) {
     console.warn('[INP] refresh failed', e);
   } finally {
@@ -2117,7 +2140,7 @@ const [fitScreen, setFitScreen] = useState(false);
             ) : (
               <div className="space-y-2">
                 {inpatients.map((r) => {
-                  const proc = items.find((it) => it.id === r.source_item_id)?.proc;
+                  const proc = inpatientProcMap[r.source_item_id] || '';
 
                   return (
                     <div
@@ -2133,31 +2156,15 @@ const [fitScreen, setFitScreen] = useState(false);
                           <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
                             {r.name ?? 'Paciente'}
                           </div>
-
-                          {proc ? (
-                            <div className="mt-1">
-                              <span
-                                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border"
-                                style={{
-                                  backgroundColor: '#EEF2FF',
-                                  color: '#1F2937',
-                                  borderColor: 'rgba(0,0,0,0.10)',
-                                }}
-                                title="Procedimiento (copiado de la pizarra)"
-                              >
-                                {String(proc)}
-                              </span>
-                            </div>
-                          ) : null}
                         </div>
 
                         <button
                           type="button"
                           onClick={() => void dischargeInpatient(r.id)}
                           className="
-                            px-3 py-2 rounded-lg border text-sm
-                            bg-white hover:bg-gray-50 border-gray-300 text-gray-700
-                            dark:bg-gray-900 dark:hover:bg-gray-800 dark:border-white/20 dark:text-gray-100
+                            px-3 py-2 rounded-lg border text-sm font-medium
+                            bg-emerald-600 hover:bg-emerald-700 border-emerald-700 text-white
+                            dark:bg-emerald-500 dark:hover:bg-emerald-600 dark:border-emerald-600 dark:text-white
                           "
                           title="Dar de alta (quitar del listado)"
                         >
@@ -2165,7 +2172,7 @@ const [fitScreen, setFitScreen] = useState(false);
                         </button>
                       </div>
 
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
                         <div>
                           <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
                             Cama
@@ -2196,7 +2203,28 @@ const [fitScreen, setFitScreen] = useState(false);
                           />
                         </div>
 
-                        <div className="md:col-span-2">
+                        <div className="min-w-0">
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                            Procedimiento
+                          </div>
+                          {proc ? (
+                            <span
+                              className="inline-flex max-w-full items-center px-2 py-1.5 rounded-lg text-xs font-medium border whitespace-nowrap overflow-hidden text-ellipsis"
+                              style={{
+                                backgroundColor: '#EEF2FF',
+                                color: '#1F2937',
+                                borderColor: '#C7D2FE',
+                              }}
+                              title={String(proc)}
+                            >
+                              {String(proc)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
+                          )}
+                        </div>
+
+                        <div className="md:col-span-3">
                           <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
                             Evolución
                           </div>
@@ -2375,7 +2403,7 @@ function RowBlock({
     </button>
 
     {/* ✅ Ingresado (cama): visible para editores incluso en modo solo lectura; clic solo si editor efectivo */}
-    {isEditorUser && (
+    {isEditorUser && (role === 'editor' || inpatientSet?.has(it.id)) && (
       <button
         type="button"
         disabled={role !== 'editor'}
@@ -2395,9 +2423,7 @@ function RowBlock({
             ? role === 'editor'
               ? 'Ingresado (click para alta)'
               : 'Ingresado'
-            : role === 'editor'
-              ? 'Marcar como ingresado'
-              : 'No ingresado'
+            : 'Marcar como ingresado'
         }
         onClick={() => {
           if (role !== 'editor') return;
