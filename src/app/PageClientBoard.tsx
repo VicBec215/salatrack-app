@@ -980,6 +980,15 @@ function formatDateES(iso: string) {
   const [y, m, d] = iso.split('-');
   return `${d}-${m}-${y}`;
 }
+
+function formatShortES(isoLike?: string | null) {
+  if (!isoLike) return '';
+  const iso = String(isoLike);
+  const ymd = iso.length >= 10 ? iso.slice(0, 10) : iso;
+  const [y, m, d] = ymd.split('-');
+  if (!y || !m || !d) return ymd;
+  return `${d}/${m}`;
+}
 /* ===== tablero ===== */
 
 function Board({
@@ -1008,7 +1017,7 @@ const [inpatientsOpen, setInpatientsOpen] = useState(false);
 const [inpatients, setInpatients] = useState<InpatientRow[]>([]);
 const [inpatientsLoading, setInpatientsLoading] = useState(false);
 const [inpatientSet, setInpatientSet] = useState<Set<string>>(new Set()); // source_item_id
-const [inpatientProcMap, setInpatientProcMap] = useState<Record<string, string>>({});
+const [inpatientMetaMap, setInpatientMetaMap] = useState<Record<string, { proc: string; day: string }>>({});
 const saveTimersRef = useRef<Record<string, any>>({});
 
 const inpatientInFlightRef = useRef<Set<string>>(new Set());
@@ -1031,25 +1040,30 @@ const refreshInpatients = useCallback(async () => {
     const ids = rows.map((r) => r.source_item_id).filter(Boolean);
     setInpatientSet(new Set(ids));
 
-    // Proc "copiado" desde la pizarra: puede no estar en la semana visible, así que lo pedimos por id
+    // Proc + fecha (items.day) "copiados" desde la pizarra: puede no estar en la semana visible, así que lo pedimos por id
     if (ids.length) {
       try {
         const { data: itData, error: itErr } = await supabase
           .from('items')
-          .select('id, proc')
+          .select('id, proc, day')
           .in('id', ids);
         if (itErr) throw itErr;
-        const map: Record<string, string> = {};
+
+        const map: Record<string, { proc: string; day: string }> = {};
         for (const x of itData ?? []) {
-          if (x?.id) map[String(x.id)] = String((x as any).proc ?? '');
+          if (!(x as any)?.id) continue;
+          map[String((x as any).id)] = {
+            proc: String((x as any).proc ?? ''),
+            day: String((x as any).day ?? ''),
+          };
         }
-        setInpatientProcMap(map);
+        setInpatientMetaMap(map);
       } catch (e) {
-        console.warn('[INP] proc lookup failed', e);
-        setInpatientProcMap({});
+        console.warn('[INP] proc/day lookup failed', e);
+        setInpatientMetaMap({});
       }
     } else {
-      setInpatientProcMap({});
+      setInpatientMetaMap({});
     }
   } catch (e) {
     console.warn('[INP] refresh failed', e);
@@ -1833,6 +1847,7 @@ const swipeHandlers = useSwipeable({
 
 const [fitScreen, setFitScreen] = useState(false);
 
+
   return (
   <div {...swipeHandlers} className="flex flex-col gap-3">
 
@@ -2140,7 +2155,9 @@ const [fitScreen, setFitScreen] = useState(false);
             ) : (
               <div className="space-y-2">
                 {inpatients.map((r) => {
-                  const proc = inpatientProcMap[r.source_item_id] || '';
+                  const meta = inpatientMetaMap[r.source_item_id];
+                  const proc = meta?.proc || '';
+                  const procDate = formatShortES(meta?.day || r.admitted_at);
 
                   return (
                     <div
@@ -2172,64 +2189,154 @@ const [fitScreen, setFitScreen] = useState(false);
                         </button>
                       </div>
 
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <div>
-                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
-                            Cama
-                          </div>
-                          <input
-                            className="w-full border rounded-lg px-3 py-1.5 text-sm
+                      <div className="mt-2 flex flex-col gap-2">
+                        {/* MÓVIL: Cama + Proc + Fecha en la misma línea; Dx debajo */}
+                        <div className="flex flex-col gap-2 md:hidden">
+                          <div className="flex items-end gap-2">
+                            {/* Cama */}
+                            <div className="flex-1">
+                              <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                                Cama
+                              </div>
+                              <input
+                                className="w-full border rounded-lg px-3 py-1.5 text-sm
                                        dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
-                            value={r.bed ?? ''}
-                            onChange={(e) =>
-                              updateInpatientFieldDebounced(r.id, { bed: e.target.value })
-                            }
-                            placeholder="Cama / Habitación"
-                          />
+                                value={r.bed ?? ''}
+                                onChange={(e) =>
+                                  updateInpatientFieldDebounced(r.id, { bed: e.target.value })
+                                }
+                                placeholder="Cama / Habitación"
+                              />
+                            </div>
+
+                            {/* Chip Procedimiento */}
+                            {proc ? (
+                              <span
+                                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap h-[34px]"
+                                style={{
+                                  backgroundColor: '#EEF2FF',
+                                  color: '#1F2937',
+                                  borderColor: '#C7D2FE',
+                                }}
+                                title="Procedimiento (copiado de la pizarra)"
+                              >
+                                {String(proc)}
+                              </span>
+                            ) : null}
+
+                            {/* Fecha */}
+                            {procDate ? (
+                              <span
+                                className="inline-flex items-center px-2 py-1 rounded-md text-[11px] border whitespace-nowrap h-[34px]
+                                       bg-gray-50 text-gray-700 border-gray-200
+                                       dark:bg-gray-800 dark:text-gray-200 dark:border-white/20"
+                                title="Fecha procedimiento"
+                              >
+                                {procDate}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {/* Dx debajo en móvil */}
+                          <div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                              Diagnóstico
+                            </div>
+                            <input
+                              className="w-full border rounded-lg px-3 py-1.5 text-sm
+                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                              value={r.dx ?? ''}
+                              onChange={(e) =>
+                                updateInpatientFieldDebounced(r.id, { dx: e.target.value })
+                              }
+                              placeholder="Dx"
+                            />
+                          </div>
                         </div>
 
+                        {/* DESKTOP: Cama + Dx + Proc + Fecha en la misma línea */}
+                        <div className="hidden md:grid grid-cols-4 gap-2 items-end">
+                          {/* Cama */}
+                          <div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                              Cama
+                            </div>
+                            <input
+                              className="w-full border rounded-lg px-3 py-1.5 text-sm
+                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                              value={r.bed ?? ''}
+                              onChange={(e) =>
+                                updateInpatientFieldDebounced(r.id, { bed: e.target.value })
+                              }
+                              placeholder="Cama / Habitación"
+                            />
+                          </div>
+
+                          {/* Dx */}
+                          <div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                              Diagnóstico
+                            </div>
+                            <input
+                              className="w-full border rounded-lg px-3 py-1.5 text-sm
+                                     dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
+                              value={r.dx ?? ''}
+                              onChange={(e) =>
+                                updateInpatientFieldDebounced(r.id, { dx: e.target.value })
+                              }
+                              placeholder="Dx"
+                            />
+                          </div>
+
+                          {/* Procedimiento (chip) */}
+                          <div className="min-w-0">
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                              Procedimiento
+                            </div>
+                            {proc ? (
+                              <span
+                                className="inline-flex max-w-full items-center px-2 py-2 rounded-md text-xs font-medium border whitespace-nowrap overflow-hidden text-ellipsis"
+                                style={{
+                                  backgroundColor: '#EEF2FF',
+                                  color: '#1F2937',
+                                  borderColor: '#C7D2FE',
+                                }}
+                                title={String(proc)}
+                              >
+                                {String(proc)}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
+                            )}
+                          </div>
+
+                          {/* Fecha */}
+                          <div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                              Fecha
+                            </div>
+                            {procDate ? (
+                              <span
+                                className="inline-flex items-center px-2 py-2 rounded-md text-xs border whitespace-nowrap
+                                       bg-gray-50 text-gray-700 border-gray-200
+                                       dark:bg-gray-800 dark:text-gray-200 dark:border-white/20"
+                                title="Fecha procedimiento"
+                              >
+                                {procDate}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Evolución abajo, compacta */}
                         <div>
-                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
-                            Diagnóstico
-                          </div>
-                          <input
-                            className="w-full border rounded-lg px-3 py-1.5 text-sm
-                                       dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
-                            value={r.dx ?? ''}
-                            onChange={(e) =>
-                              updateInpatientFieldDebounced(r.id, { dx: e.target.value })
-                            }
-                            placeholder="Dx"
-                          />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
-                            Procedimiento
-                          </div>
-                          {proc ? (
-                            <span
-                              className="inline-flex max-w-full items-center px-2 py-1.5 rounded-lg text-xs font-medium border whitespace-nowrap overflow-hidden text-ellipsis"
-                              style={{
-                                backgroundColor: '#EEF2FF',
-                                color: '#1F2937',
-                                borderColor: '#C7D2FE',
-                              }}
-                              title={String(proc)}
-                            >
-                              {String(proc)}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
-                          )}
-                        </div>
-
-                        <div className="md:col-span-3">
                           <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
                             Evolución
                           </div>
                           <textarea
-                            className="w-full border rounded-lg px-3 py-1.5 text-sm min-h-[64px]
+                            className="w-full border rounded-lg px-3 py-1.5 text-sm min-h-[56px]
                                        dark:bg-gray-900 dark:text-gray-100 dark:border-white/20"
                             value={r.evolution ?? ''}
                             onChange={(e) =>
@@ -2478,22 +2585,50 @@ function RowBlock({
                   <div className="mt-2 text-sm font-semibold break-words text-gray-900 dark:text-gray-100">{it.name}</div>
 
                   {/* Chips */}
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {it.dx ? <Chip>Dx: {it.dx}</Chip> : null}                    
-                    {it.room ? <Chip>Hab: {it.room}</Chip> : null}
-                    {it.proc ? (() => {
-  const meta = procs.find((p: ProcDef) => p.name === it.proc);
-  const bg = meta?.color_bg ?? '#EEF2FF';   // fallback suave
-  const fg = meta?.color_text ?? '#1F2937';
-  return (
-    <span
-      className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border"
-      style={{ backgroundColor: bg, color: fg, borderColor: 'rgba(0,0,0,0.10)' }}
-    >
-      {String(it.proc)}
-    </span>
-  );
-})() : null}
+                  <div className="mt-2 flex flex-col gap-2">
+                    {/* Dx (puede ir arriba) */}
+                    {it.dx ? (
+                      <div className="flex flex-wrap gap-2">
+                        <Chip>Dx: {it.dx}</Chip>
+                      </div>
+                    ) : null}
+
+                    {/* Línea compacta: Hab + Proc + Fecha (en móvil misma línea) */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {it.room ? <Chip>Hab: {it.room}</Chip> : null}
+
+                      {it.proc
+                        ? (() => {
+                            const meta = procs.find((p: ProcDef) => p.name === it.proc);
+                            const bg = meta?.color_bg ?? '#EEF2FF';
+                            const fg = meta?.color_text ?? '#1F2937';
+                            return (
+                              <span
+                                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border"
+                                style={{
+                                  backgroundColor: bg,
+                                  color: fg,
+                                  borderColor: 'rgba(0,0,0,0.10)',
+                                }}
+                              >
+                                {String(it.proc)}
+                              </span>
+                            );
+                          })()
+                        : null}
+
+                      {/* Fecha del procedimiento (abreviada) */}
+                      {it.day ? (
+                        <span
+                          className="inline-flex items-center px-2 py-1 rounded-md text-[11px] border whitespace-nowrap
+                                     bg-gray-50 text-gray-700 border-gray-200
+                                     dark:bg-gray-800 dark:text-gray-200 dark:border-white/20"
+                          title="Fecha"
+                        >
+                          {formatShortES(it.day)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               );
