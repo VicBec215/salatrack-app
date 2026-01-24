@@ -235,7 +235,7 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
   const [role, setRole] = useState<'editor' | 'viewer' | 'unknown'>('unknown');
 
   const [centerId, setCenterId] = useState<string | null>(null);
-  const [centerName, setCenterName] = useState<string>(centerSlug || '');
+  const [centerName, setCenterName] = useState<string>('SalaTrack');  
   const [rows, setRows] = useState<RowKey[]>([]);
   const [procs, setProcs] = useState<ProcDef[]>([]);
   const [openRoomsToday, setOpenRoomsToday] = useState<number | null>(null);
