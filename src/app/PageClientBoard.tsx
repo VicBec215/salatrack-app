@@ -1003,9 +1003,12 @@ function Board({
   centerId: string | null;
 }) {
 const [weekStart, setWeekStart] = useState<Date>(() => {
-  // Siempre arrancamos en la semana ACTUAL (lunes)
-  // T12:00 evita problemas de timezone/DST
-  return startOfWeekMonday(new Date());
+  // Arranque inteligente:
+  // - Entre semana: lunes de la semana actual
+  // - Sábado/Domingo: lunes de la semana que entra
+  // (getActiveDayISO ya ajusta fin de semana -> lunes)
+  const activeIso = getActiveDayISO();
+  return startOfWeekMonday(new Date(`${activeIso}T12:00:00`));
 });
   const [items, setItems] = useState<Item[]>([]);
   const [search, setSearch] = useState('');
