@@ -232,7 +232,8 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
   // State
   // ─────────────────────────────────────────────────────────────
   const [authReady, setAuthReady] = useState(false);
-  const [role, setRole] = useState<'editor' | 'viewer' | 'unknown'>('unknown');
+  const [roleReady, setRoleReady] = useState(false);
+  const [role, setRole] = useState<'editor' | 'viewer' | 'unknown' | 'none' | 'loading'>('loading');
 
   const [centerId, setCenterId] = useState<string | null>(null);
   const [centerName, setCenterName] = useState<string>('SalaTrack');  
@@ -279,7 +280,8 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
         .map((x: any) => String(x.name))
         .filter(Boolean);
 
-      setRows(roomNames.length ? roomNames : ['Sala 1']);
+      // If rooms are not readable (RLS), do NOT fall back to Sala 1; keep empty and let UI handle.
+      setRows(roomNames.length ? roomNames : []);
 
       // Procedures
       const { data: procData, error: pErr } = await supabase
@@ -359,137 +361,127 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
   }, [loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────
-// 2) Auth bootstrap + listener (NO bloqueante + timeout)
-// ─────────────────────────────────────────────────────────────
-useEffect(() => {
-  let alive = true;
+  // 2) Auth bootstrap + listener
+  //    - Do NOT default to viewer on transient/timeout.
+  //    - Block board rendering until role is resolved.
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let alive = true;
 
-  const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T> => {
-    let t: any;
-    const timeout = new Promise<never>((_, rej) => {
-      t = setTimeout(() => rej(new Error(`Timeout: ${label}`)), ms);
-    });
-    try {
-      return await Promise.race([p, timeout]);
-    } finally {
-      clearTimeout(t);
-    }
-  };
-
-  // Mejorada: trata errores transitorios de forma silenciosa, timeout solo local, fallback viewer
-  const resolveRole = async (sess: any) => {
-    const hasUser = !!sess?.user;
-    if (!hasUser) return 'unknown' as const;
-
-    try {
-      // Timeout solo para el rol (no para el resto del boot)
-      const r = await withTimeout(getMyRole(centerSlug), 4000, 'getMyRole');
-      return r;
-    } catch (e) {
-      // Si es transitorio/abort/timeout, no asustes: caemos a viewer y reintentamos en background
-      if (isTransientNetworkError(e)) {
-        console.warn('[AUTH] getMyRole transient/timeout -> viewer (will retry)', e);
-      } else {
-        console.warn('[AUTH] getMyRole failed -> viewer (will retry)', e);
+    const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T> => {
+      let t: any;
+      const timeout = new Promise<never>((_, rej) => {
+        t = setTimeout(() => rej(new Error(`Timeout: ${label}`)), ms);
+      });
+      try {
+        return await Promise.race([p, timeout]);
+      } finally {
+        clearTimeout(t);
       }
-      return 'viewer' as const;
-    }
-  };
+    };
 
-  // Si el role cae a viewer por timeout/transitorio, intentamos “subir” a editor en background
-  // (sin bloquear UI) y sin solapar reintentos.
-  let upgrading: Promise<void> | null = null;
+    const resolveRole = async (sess: any) => {
+      const hasUser = !!sess?.user;
+      if (!hasUser) {
+        // Not logged in
+        return { role: 'unknown' as const, ready: true };
+      }
 
-  const upgradeToEditor = async (sess: any) => {
-    if (!sess?.user) return;
-    if (upgrading) return upgrading;
+      // Logged in: we must resolve membership/role.
+      try {
+        const r = await withTimeout(getMyRole(centerSlug), 6000, 'getMyRole');
+        // getMyRole should return 'editor' | 'viewer' | 'unknown'
+        if (r === 'editor' || r === 'viewer') return { role: r, ready: true };
+        // If it returns unknown for authenticated user, treat as no-access.
+        return { role: 'none' as const, ready: true };
+      } catch (e) {
+        // Transient/timeout: keep loading and retry in background. Do NOT assume viewer.
+        if (isTransientNetworkError(e)) {
+          console.warn('[AUTH] getMyRole transient/timeout -> loading (will retry)', e);
+        } else {
+          console.warn('[AUTH] getMyRole failed -> loading (will retry)', e);
+        }
+        return { role: 'loading' as const, ready: false };
+      }
+    };
 
-    upgrading = (async () => {
-      const maxTries = 6;
-      for (let i = 0; i < maxTries && alive; i++) {
-        // espera fija (evita martillar) + un pequeño jitter
-        const waitMs = 2200 + Math.floor(Math.random() * 600);
-        await new Promise((r) => setTimeout(r, waitMs));
-        if (!alive) return;
-
-        try {
-          const r2 = await resolveRole(sess);
+    // Background retry loop while role is not ready
+    let retrying: Promise<void> | null = null;
+    const retryResolve = async (sess: any) => {
+      if (!sess?.user) return;
+      if (retrying) return;
+      retrying = (async () => {
+        const maxTries = 10;
+        for (let i = 0; i < maxTries && alive; i++) {
+          const waitMs = 900 + Math.floor(Math.random() * 500) + i * 250;
+          await new Promise((r) => setTimeout(r, waitMs));
           if (!alive) return;
-          if (r2 === 'editor') {
-            console.log('[AUTH] role upgraded to editor on retry');
-            setRole('editor');
+
+          const res = await resolveRole(sess);
+          if (!alive) return;
+          if (res.ready) {
+            setRole(res.role);
+            setRoleReady(true);
             return;
           }
-        } catch {
-          // ignoramos y seguimos intentando
         }
+        // If after retries we never resolved, fail closed.
+        if (!alive) return;
+        setRole('none');
+        setRoleReady(true);
+      })().finally(() => {
+        retrying = null;
+      });
+    };
+
+    const applySession = async (sess: any) => {
+      if (!alive) return;
+      setAuthReady(true);
+
+      // Role resolution phase
+      setRoleReady(false);
+      setRole(sess?.user ? 'loading' : 'unknown');
+
+      const res = await resolveRole(sess);
+      if (!alive) return;
+
+      if (res.ready) {
+        setRole(res.role);
+        setRoleReady(true);
+      } else {
+        // still loading
+        setRole('loading');
+        setRoleReady(false);
+        void retryResolve(sess);
       }
-    })().finally(() => {
-      upgrading = null;
+    };
+
+    // Listener
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      console.log('[AUTH] onAuthStateChange user =', !!sess?.user);
+      await applySession(sess);
     });
 
-    return upgrading;
-  };
-
-  // Listener SIEMPRE activo
-  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-    if (!alive) return;
-
-    console.log('[AUTH] onAuthStateChange user =', !!sess?.user);
-
-    // ✅ NO bloquees la UI esperando nada
-    setAuthReady(true);
-
-    // Optimista: si hay usuario, al menos viewer mientras resolvemos
-    setRole(sess?.user ? 'viewer' : 'unknown');
-
-    // Luego intentamos resolver el rol real con timeout
-    const nextRole = await resolveRole(sess);
-    if (!alive) return;
-    setRole(nextRole);
-
-    // ✅ Retry upgrade si hay usuario pero nos quedamos en viewer (típico tras timeouts/transitorios)
-    if (sess?.user && nextRole === 'viewer') {
-      void upgradeToEditor(sess);
-    }
-  });
-
-  // Bootstrap inicial
-  (async () => {
-    try {
-      const { data } = await supabase.auth.getSession();
-      if (!alive) return;
-
-      console.log('[AUTH] mount session user =', !!data.session?.user);
-
-      // ✅ UI lista ya
-      setAuthReady(true);
-
-      // Optimista
-      setRole(data.session?.user ? 'viewer' : 'unknown');
-
-      // Rol real (con timeout)
-      const nextRole = await resolveRole(data.session);
-      if (!alive) return;
-      setRole(nextRole);
-
-      // ✅ Retry upgrade también en el boot (por si entramos con sesión ya guardada)
-      if (data.session?.user && nextRole === 'viewer') {
-        void upgradeToEditor(data.session);
+    // Bootstrap
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        console.log('[AUTH] mount session user =', !!data.session?.user);
+        await applySession(data.session);
+      } catch (e) {
+        console.warn('[AUTH] boot failed -> unknown', e);
+        if (!alive) return;
+        setRole('unknown');
+        setRoleReady(true);
+        setAuthReady(true);
       }
-    } catch (e) {
-      console.warn('[AUTH] boot failed -> unknown', e);
-      if (!alive) return;
-      setRole('unknown');
-      setAuthReady(true);
-    }
-  })();
+    })();
 
-  return () => {
-    alive = false;
-    listener.subscription.unsubscribe();
-  };
-}, [centerSlug]);
+    return () => {
+      alive = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [centerSlug]);
 
   // ─────────────────────────────────────────────────────────────
   // Render
@@ -499,14 +491,20 @@ useEffect(() => {
       <Header role={role} centerName={centerName} openRoomsToday={openRoomsToday} />
       {!authReady ? (
         <div className="text-sm text-gray-600">Cargando…</div>
+      ) : !centerId ? (
+        <div className="text-sm text-gray-600">Cargando centro…</div>
       ) : role === 'unknown' ? (
         <div className="text-sm text-gray-600">
           Inicia sesión para editar. (Modo lectura si no tienes permisos)
         </div>
-      ) : centerId ? (
-        <Board role={role} rows={rows} procs={procs} centerId={centerId} />
+      ) : role === 'loading' || !roleReady ? (
+        <div className="text-sm text-gray-600">Verificando permisos…</div>
+      ) : role === 'none' ? (
+        <div className="text-sm text-gray-600">No tienes acceso a este centro.</div>
+      ) : rows.length === 0 ? (
+        <div className="text-sm text-gray-600">No hay salas visibles para este centro.</div>
       ) : (
-        <div className="text-sm text-gray-600">Cargando centro…</div>
+        <Board role={role} rows={rows} procs={procs} centerId={centerId} />
       )}
     </div>
   );
@@ -519,7 +517,7 @@ function Header({
   centerName,
   openRoomsToday,
 }: {
-  role: 'editor' | 'viewer' | 'unknown';
+  role: 'editor' | 'viewer' | 'unknown' | 'none' | 'loading';
   centerName: string;
   openRoomsToday: number | null;
 }) {
@@ -563,7 +561,15 @@ function Header({
             dark:bg-gray-900 dark:text-gray-200 dark:border-gray-600
           "
         >
-          {role === 'editor' ? 'Editor' : role === 'viewer' ? 'Solo lectura' : 'No autenticado'}
+          {role === 'editor'
+            ? 'Editor'
+            : role === 'viewer'
+            ? 'Solo lectura'
+            : role === 'loading'
+            ? 'Verificando…'
+            : role === 'none'
+            ? 'Sin acceso'
+            : 'No autenticado'}
         </span>
 
         <AuthButtons />
