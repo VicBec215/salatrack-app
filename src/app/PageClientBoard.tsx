@@ -531,6 +531,7 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
   );
 }
 
+
 /* ===== cabecera / auth ===== */
 
 function Header({
