@@ -251,6 +251,10 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
     if (loadingCenterRef.current) return loadingCenterRef.current;
 
     const p = (async () => {
+      // Ensure the auth session (if any) is loaded into the client before RLS-protected queries
+      try {
+        await supabase.auth.getSession();
+      } catch {}
       // NOTE: usamos limit(1)+maybeSingle() para evitar errores si hay 0 o >1 centros con el mismo slug
       const { data: center, error: cErr } = await supabase
         .from('centers')
@@ -336,12 +340,13 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
 
   // ─────────────────────────────────────────────────────────────
   // 1b) Cargar configuración del centro SIEMPRE (aunque no haya login)
-  //     (un solo disparo; sin watchdog ni hard-retries)
+  //     Espera a que el auth esté bootstrappeado y reintenta en sign-in/out
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!authReady) return;
     let cancelled = false;
 
-    void (async () => {
+    const run = async () => {
       try {
         await loadCenterConfig();
       } catch (e) {
@@ -353,12 +358,26 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
         }
         showErr(e);
       }
-    })();
+    };
+
+    void run();
+
+    // Reintenta al hacer sign-in/out (señal emitida por AuthButtons)
+    const onIn = () => void run();
+    const onOut = () => void run();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('salatrack:signedin', onIn);
+      window.addEventListener('salatrack:signedout', onOut);
+    }
 
     return () => {
       cancelled = true;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('salatrack:signedin', onIn);
+        window.removeEventListener('salatrack:signedout', onOut);
+      }
     };
-  }, [loadCenterConfig]);
+  }, [authReady, loadCenterConfig]);
   // ─────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────
   // 2) Auth bootstrap + listener
@@ -502,7 +521,9 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
       ) : role === 'none' ? (
         <div className="text-sm text-gray-600">No tienes acceso a este centro.</div>
       ) : rows.length === 0 ? (
-        <div className="text-sm text-gray-600">No hay salas visibles para este centro.</div>
+        <div className="text-sm text-gray-600">
+          No hay salas visibles para este centro. (Si acabas de iniciar sesión, espera 1–2s y se recargará automáticamente)
+        </div>
       ) : (
         <Board role={role} rows={rows} procs={procs} centerId={centerId} />
       )}
