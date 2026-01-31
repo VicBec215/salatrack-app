@@ -389,6 +389,13 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
   useEffect(() => {
     let alive = true;
 
+    const currentUserIdRef = { current: null as string | null };
+    const roleRef = { current: role as any };
+    const roleReadyRef = { current: roleReady };
+
+    // keep refs updated
+    // (we update inside this effect via local assignments to avoid adding deps)
+
     const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T> => {
       let t: any;
       const timeout = new Promise<never>((_, rej) => {
@@ -405,6 +412,9 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
       const hasUser = !!sess?.user;
       if (!hasUser) {
         // Not logged in
+        currentUserIdRef.current = null;
+        roleRef.current = 'unknown';
+        roleReadyRef.current = true;
         return { role: 'unknown' as const, ready: true };
       }
 
@@ -414,6 +424,8 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
         // getMyRole should return 'editor' | 'viewer' | 'unknown'
         if (r === 'editor' || r === 'viewer') return { role: r, ready: true };
         // If it returns unknown for authenticated user, treat as no-access.
+        roleRef.current = 'none';
+        roleReadyRef.current = true;
         return { role: 'none' as const, ready: true };
       } catch (e) {
         // Transient/timeout: keep loading and retry in background. Do NOT assume viewer.
@@ -450,6 +462,8 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
         if (!alive) return;
         setRole('none');
         setRoleReady(true);
+        roleRef.current = 'none';
+        roleReadyRef.current = true;
       })().finally(() => {
         retrying = null;
       });
@@ -459,9 +473,28 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
       if (!alive) return;
       setAuthReady(true);
 
+      const nextUserId = sess?.user?.id ?? null;
+
+      // FAST PATH: if it's the same logged-in user and we already have a resolved role,
+      // do NOT flip to loading or re-check membership (avoids 8–10s "Verificando permisos…" after tab resume).
+      if (
+        nextUserId &&
+        currentUserIdRef.current === nextUserId &&
+        roleReadyRef.current === true &&
+        (roleRef.current === 'editor' || roleRef.current === 'viewer')
+      ) {
+        setAuthReady(true);
+        return;
+      }
+
+      // update current user id
+      currentUserIdRef.current = nextUserId;
+
       // Role resolution phase
       setRoleReady(false);
       setRole(sess?.user ? 'loading' : 'unknown');
+      roleRef.current = sess?.user ? 'loading' : 'unknown';
+      roleReadyRef.current = false;
 
       const res = await resolveRole(sess);
       if (!alive) return;
@@ -469,10 +502,14 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
       if (res.ready) {
         setRole(res.role);
         setRoleReady(true);
+        roleRef.current = res.role;
+        roleReadyRef.current = true;
       } else {
         // still loading
         setRole('loading');
         setRoleReady(false);
+        roleRef.current = 'loading';
+        roleReadyRef.current = false;
         void retryResolve(sess);
       }
     };
@@ -493,6 +530,9 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
         console.warn('[AUTH] boot failed -> unknown', e);
         if (!alive) return;
         setRole('unknown');
+        currentUserIdRef.current = null;
+        roleRef.current = 'unknown';
+        roleReadyRef.current = true;
         setRoleReady(true);
         setAuthReady(true);
       }
