@@ -149,7 +149,7 @@ function InlineEditorCard({
   const [proc, setProc] = useState<string>(initial.proc);
 
   return (
-    <div className="bg-white rounded-xl border p-3 flex flex-col gap-3 shadow-sm">
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-3 flex flex-col gap-3 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
           {title}
@@ -176,7 +176,7 @@ function InlineEditorCard({
   <label className="text-xs text-gray-600 dark:text-gray-300">
     ID -evitar nombre completo-
     <input
-      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm"
+      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-400 dark:placeholder-gray-500"
       value={name}
       onChange={(e) => setName(e.target.value)}
       placeholder="Paciente"
@@ -186,7 +186,7 @@ function InlineEditorCard({
   <label className="text-xs text-gray-600 dark:text-gray-300">
     Diagnóstico
     <input
-      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm"
+      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-400 dark:placeholder-gray-500"
       value={dx}
       onChange={(e) => setDx(e.target.value)}
       placeholder="Motivo / Dx"
@@ -196,7 +196,7 @@ function InlineEditorCard({
   <label className="text-xs text-gray-600 dark:text-gray-300">
     Habitación
     <input
-      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm"
+      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 placeholder-gray-400 dark:placeholder-gray-500"
       value={room}
       onChange={(e) => setRoom(e.target.value)}
       placeholder="Habitación, cama, etc."
@@ -206,7 +206,7 @@ function InlineEditorCard({
   <label className="text-xs text-gray-600 dark:text-gray-300">
     Procedimiento
     <select
-      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm bg-white"
+      className="mt-1 w-full border rounded-lg px-2 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
       value={proc}
       onChange={(e) => setProc(e.target.value as ProcKey)}
     >
