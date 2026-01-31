@@ -674,7 +674,6 @@ function AuthButtons() {
 
   const signOut = async () => {
     try {
-      localStorage.removeItem('salatrack_readonly');
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
