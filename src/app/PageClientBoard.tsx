@@ -605,6 +605,7 @@ function Header({
 function AuthButtons() {
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // ✅ modal login (solo móvil)
@@ -657,6 +658,7 @@ function AuthButtons() {
 
       setEmail('');
       setPass('');
+      setShowPass(false);
       setOpen(false);
 
       // Aviso opcional para otros componentes
@@ -679,6 +681,7 @@ function AuthButtons() {
       setOpen(false);
       setEmail('');
       setPass('');
+      setShowPass(false);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('salatrack:signedout'));
@@ -728,6 +731,7 @@ function AuthButtons() {
 
       setNewPass('');
       setNewPass2('');
+      setShowPass(false);
       setRecoveryMode(false);
 
       // Cierra modal (por si estás en móvil)
@@ -812,15 +816,26 @@ function AuthButtons() {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
             />
-            <input
-              className="w-[140px] border rounded-lg px-2 py-1 text-sm
-                         dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-              placeholder="password"
-              type="password"
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              autoComplete="current-password"
-            />
+            <div className="relative">
+              <input
+                className="w-[140px] border rounded-lg px-2 py-1 text-sm pr-8
+                           dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                placeholder="password"
+                type={showPass ? 'text' : 'password'}
+                value={pass}
+                onChange={(e) => setPass(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass((v) => !v)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                title={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPass ? '🙈' : '👁️'}
+              </button>
+            </div>
             <button
               type="submit"
               className="px-2 py-1 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
@@ -938,15 +953,26 @@ function AuthButtons() {
                     autoComplete="email"
                     autoFocus
                   />
-                  <input
-                    className="w-full border rounded-lg px-3 py-2 text-sm
-                               dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-                    placeholder="password"
-                    type="password"
-                    value={pass}
-                    onChange={(e) => setPass(e.target.value)}
-                    autoComplete="current-password"
-                  />
+                  <div className="relative">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2 text-sm pr-10
+                                 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+                      placeholder="password"
+                      type={showPass ? 'text' : 'password'}
+                      value={pass}
+                      onChange={(e) => setPass(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                      title={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                      aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    >
+                      {showPass ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                   <button
                     type="submit"
                     className="mt-1 w-full px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800
