@@ -151,13 +151,19 @@ function InlineEditorCard({
   return (
     <div className="bg-white rounded-xl border p-3 flex flex-col gap-3 shadow-sm">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold">{title}</div>
+        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+          {title}
+        </div>
         <div className="flex items-center gap-1">
-          <button className="p-1 rounded hover:bg-gray-100" title="Cancelar" onClick={onCancel}>
+          <button
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+            title="Cancelar"
+            onClick={onCancel}
+          >
             <X className="w-4 h-4" />
           </button>
           <button
-            className="p-1 rounded hover:bg-gray-100"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
             title="Guardar"
             onClick={() => onSave({ name, room, dx, proc })}
           >
@@ -167,7 +173,7 @@ function InlineEditorCard({
       </div>
 
       <div className="flex flex-col gap-2">
-  <label className="text-xs text-gray-600">
+  <label className="text-xs text-gray-600 dark:text-gray-300">
     ID -evitar nombre completo-
     <input
       className="mt-1 w-full border rounded-lg px-2 py-2 text-sm"
@@ -177,7 +183,7 @@ function InlineEditorCard({
     />
   </label>
 
-  <label className="text-xs text-gray-600">
+  <label className="text-xs text-gray-600 dark:text-gray-300">
     Diagnóstico
     <input
       className="mt-1 w-full border rounded-lg px-2 py-2 text-sm"
@@ -187,7 +193,7 @@ function InlineEditorCard({
     />
   </label>
 
-  <label className="text-xs text-gray-600">
+  <label className="text-xs text-gray-600 dark:text-gray-300">
     Habitación
     <input
       className="mt-1 w-full border rounded-lg px-2 py-2 text-sm"
@@ -197,7 +203,7 @@ function InlineEditorCard({
     />
   </label>
 
-  <label className="text-xs text-gray-600">
+  <label className="text-xs text-gray-600 dark:text-gray-300">
     Procedimiento
     <select
       className="mt-1 w-full border rounded-lg px-2 py-2 text-sm bg-white"
