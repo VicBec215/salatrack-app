@@ -1434,6 +1434,39 @@ const refresh = useCallback(async () => {
       }
     };
 
+    // Bloque para refresco inmediato al volver a la pestaña o foco (con cooldown)
+    let lastImmediateRefresh = 0;
+    const IMMEDIATE_COOLDOWN_MS = 1500;
+
+    const immediateRefresh = () => {
+      const now = Date.now();
+      if (now - lastImmediateRefresh < IMMEDIATE_COOLDOWN_MS) return;
+      lastImmediateRefresh = now;
+      void refreshSafe();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        immediateRefresh();
+      }
+    };
+
+    const onFocus = () => {
+      immediateRefresh();
+    };
+
+    const onOnline = () => {
+      immediateRefresh();
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onFocus);
+      window.addEventListener('online', onOnline);
+    }
+
     // 1) primera carga
     void refreshSafe();
 
@@ -1446,13 +1479,20 @@ const refresh = useCallback(async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         void refreshSafe();
       }
-    }, 60000);
+    }, 45000);
 
     return () => {
       alive = false;
       unsubRef.current?.();
       unsubRef.current = null;
       clearInterval(pollId);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onFocus);
+        window.removeEventListener('online', onOnline);
+      }
     };
   }, [centerId, refresh]);
 
