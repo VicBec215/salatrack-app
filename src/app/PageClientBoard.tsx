@@ -1441,10 +1441,18 @@ const refresh = useCallback(async () => {
     unsubRef.current?.();
     unsubRef.current = subscribeItems(centerId, () => void refreshSafe());
 
+    // 3) fallback: refresco periódico si el canal realtime se queda “zombi”
+    const pollId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void refreshSafe();
+      }
+    }, 60000);
+
     return () => {
       alive = false;
       unsubRef.current?.();
       unsubRef.current = null;
+      clearInterval(pollId);
     };
   }, [centerId, refresh]);
 

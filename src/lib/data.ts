@@ -64,7 +64,8 @@ export async function getMinOrd(centerId: string, day: string, row: RowKey): Pro
  * mondayISO = 'YYYY-MM-DD'
  */
 export async function listWeek(centerId: string, mondayISO: string) {
-  const monday = new Date(mondayISO);
+  // ⚠️ Usar T12:00:00 evita desajustes por zona horaria/DST al parsear YYYY-MM-DD
+  const monday = new Date(`${mondayISO}T12:00:00`);
   const friday = new Date(monday);
   friday.setDate(friday.getDate() + 4);
   const fridayISO = friday.toISOString().slice(0, 10);
@@ -142,17 +143,36 @@ export async function deleteItem(id: string) {
  * Devuelve función de unsubscribe
  */
 export function subscribeItems(centerId: string, onChange: () => void) {
+  const channelName = `items-${centerId}`;
+
   const channel = supabase
-    .channel(`items-${centerId}`)
+    .channel(channelName)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'items', filter: `center_id=eq.${centerId}` },
-      onChange
+      (_payload) => {
+        // cualquier INSERT/UPDATE/DELETE del centro dispara refresh
+        onChange();
+      }
     )
-    .subscribe();
+    .subscribe((status) => {
+      // Muy útil: tras reconectar/subscribirse, fuerza un refresh para evitar pantallas “desincronizadas”
+      if (status === 'SUBSCRIBED') {
+        onChange();
+      }
+
+      // Logs suaves para depurar (no UI)
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn(`[realtime] ${channelName} status:`, status);
+      }
+    });
 
   return () => {
-    supabase.removeChannel(channel);
+    try {
+      supabase.removeChannel(channel);
+    } catch (e) {
+      console.warn('[realtime] removeChannel failed', e);
+    }
   };
 }
 
