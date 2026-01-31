@@ -2648,17 +2648,7 @@ function RowBlock({
                           })()
                         : null}
 
-                      {/* Fecha del procedimiento (abreviada) */}
-                      {it.day ? (
-                        <span
-                          className="inline-flex items-center px-2 py-1 rounded-md text-[11px] border whitespace-nowrap
-                                     bg-gray-50 text-gray-700 border-gray-200
-                                     dark:bg-gray-800 dark:text-gray-200 dark:border-white/20"
-                          title="Fecha"
-                        >
-                          {formatShortES(it.day)}
-                        </span>
-                      ) : null}
+                      
                     </div>
                   </div>
                 </div>
