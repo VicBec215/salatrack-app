@@ -57,6 +57,8 @@ import {
   Circle,
   BedDouble,
   Loader2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 /* ===== helpers (UNA sola vez) ===== */
@@ -833,7 +835,7 @@ function AuthButtons() {
                 title={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
-                {showPass ? '🙈' : '👁️'}
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
             <button
@@ -970,7 +972,7 @@ function AuthButtons() {
                       title={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                       aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     >
-                      {showPass ? '🙈' : '👁️'}
+                      {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                   <button
