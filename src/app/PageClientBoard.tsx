@@ -234,6 +234,31 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
     const fromPath = (parts[0] || '').trim();
     return fromPath ? fromPath.toLowerCase() : '';
   }, [slug]);
+
+  // ✅ Opción C: recordar el último centro real y redirigir desde /test (PWA start_url)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const current = String(centerSlug || '').trim().toLowerCase();
+    if (!current) return;
+
+    // Si estamos en un centro real, lo guardamos como último centro
+    if (current !== 'test') {
+      try {
+        localStorage.setItem('salatrack_last_slug', current);
+      } catch {}
+      return;
+    }
+
+    // Si estamos en /test, saltamos al último centro visitado
+    try {
+      const last = (localStorage.getItem('salatrack_last_slug') || '').trim().toLowerCase();
+      if (last && last !== 'test' && last !== current) {
+        // replace: no vuelve a /test al dar atrás
+        window.location.replace(`/${last}`);
+      }
+    } catch {}
+  }, [centerSlug]);
   
 
   // ─────────────────────────────────────────────────────────────

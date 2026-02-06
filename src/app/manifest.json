@@ -1,8 +1,9 @@
 {
   "name": "SalaTrack",
   "short_name": "SalaTrack",
-  "description": "Agenda clínica y pizarra de hemodinámica",
+  "description": "Agenda clínica",
   "start_url": "/test",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
