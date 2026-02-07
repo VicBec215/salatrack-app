@@ -236,28 +236,47 @@ export default function PageClientBoard({ slug }: { slug?: string }) {
   }, [slug]);
 
   // ✅ Opción C: recordar el último centro real y redirigir desde /test (PWA start_url)
+  // Nota: mantenemos compatibilidad con claves antiguas y nuevas.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const current = String(centerSlug || '').trim().toLowerCase();
-    if (!current) return;
+    const STORAGE_KEYS = ['salatrack:lastSlug', 'salatrack_last_slug'];
 
-    // Si estamos en un centro real, lo guardamos como último centro
-    if (current !== 'test') {
+    const current = String(centerSlug || '').trim().toLowerCase();
+    const path = window.location.pathname;
+
+    const readLast = () => {
       try {
-        localStorage.setItem('salatrack_last_slug', current);
+        for (const k of STORAGE_KEYS) {
+          const v = (localStorage.getItem(k) || '').trim().toLowerCase();
+          if (v) return v;
+        }
       } catch {}
+      return '';
+    };
+
+    const writeLast = (val: string) => {
+      try {
+        for (const k of STORAGE_KEYS) localStorage.setItem(k, val);
+      } catch {}
+    };
+
+    // 1) Si estamos en un centro real, lo guardamos como último centro
+    if (current && current !== 'test') {
+      writeLast(current);
       return;
     }
 
-    // Si estamos en /test, saltamos al último centro visitado
-    try {
-      const last = (localStorage.getItem('salatrack_last_slug') || '').trim().toLowerCase();
-      if (last && last !== 'test' && last !== current) {
-        // replace: no vuelve a /test al dar atrás
+    // 2) Si estamos en /test (o por cualquier motivo el slug actual no existe),
+    //    redirigimos al último centro visitado.
+    //    (replace: no vuelve a /test al dar atrás)
+    const last = readLast();
+    if (last && last !== 'test' && last !== current) {
+      // Solo redirigir si realmente estamos en /test (evita bucles raros)
+      if (path === '/test' || path === '/test/') {
         window.location.replace(`/${last}`);
       }
-    } catch {}
+    }
   }, [centerSlug]);
   
 
